@@ -1,7 +1,7 @@
 "use client"
 
-import { useRef, useState } from "react"
-import { Camera, CameraOff, Check, Loader2, Plus } from "lucide-react"
+import { useCallback, useEffect, useRef, useState } from "react"
+import { Camera, CameraOff, Check, ChevronDown, Loader2, Plus, Search, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -22,37 +22,142 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { PLATE_LETTERS } from "@/lib/types"
+import { PLATE_LETTERS, type ApiCar, type ApiCarModel } from "@/lib/types"
 import { toFa } from "@/lib/format"
 import { useGarage } from "@/components/garage-provider"
 import { LicensePlate } from "@/components/license-plate"
+import { fetchCars, fetchModels, createCar, updateCar, createModel } from "@/lib/api"
 
-const empty = {
+// ------------------- state اولیه -------------------
+const emptyForm = {
   twoDigits: "",
   letter: "ب",
   threeDigits: "",
   region: "",
-  brand: "",
-  model: "",
   color: "",
   year: "",
-  ownerName: "",
   ownerPhone: "",
+  mileage: "",
   note: "",
 }
 
+const emptyModel = {
+  make: "",
+  model: "",
+  model_year: "",
+  transmission_type: "man" as "man" | "auto",
+}
+
+type Step = "plate" | "info"
+
+// ------------------- کامپوننت -------------------
 export function AddCarDialog() {
   const { addCar } = useGarage()
   const [open, setOpen] = useState(false)
-  const [form, setForm] = useState(empty)
+  const [step, setStep] = useState<Step>("plate")
+
+  // فرم اصلی
+  const [form, setForm] = useState(emptyForm)
+  const set = (key: keyof typeof emptyForm, value: string) =>
+    setForm((f) => ({ ...f, [key]: value }))
+
+  // دوربین
   const [camActive, setCamActive] = useState(false)
   const [scanning, setScanning] = useState(false)
   const videoRef = useRef<HTMLVideoElement>(null)
   const streamRef = useRef<MediaStream | null>(null)
 
-  const set = (key: keyof typeof form, value: string) =>
-    setForm((f) => ({ ...f, [key]: value }))
+  // جستجوی خودرو با پلاک
+  const [allCars, setAllCars] = useState<ApiCar[]>([])
+  const [carsLoading, setCarsLoading] = useState(false)
+  const [plateDropOpen, setPlateDropOpen] = useState(false)
+  const [selectedCar, setSelectedCar] = useState<ApiCar | null>(null) // ماشین انتخاب‌شده از API
 
+  // جستجوی مدل
+  const [allModels, setAllModels] = useState<ApiCarModel[]>([])
+  const [modelsLoading, setModelsLoading] = useState(false)
+  const [modelSearch, setModelSearch] = useState("")
+  const [modelDropOpen, setModelDropOpen] = useState(false)
+  const [selectedModel, setSelectedModel] = useState<ApiCarModel | null>(null)
+  const [isNewModel, setIsNewModel] = useState(false)
+  const [newModelForm, setNewModelForm] = useState(emptyModel)
+  const setNm = (key: keyof typeof emptyModel, value: string) =>
+    setNewModelForm((f) => ({ ...f, [key]: value }))
+
+  // وضعیت submit
+  const [submitting, setSubmitting] = useState(false)
+  const [submitError, setSubmitError] = useState("")
+
+  // بارگذاری لیست خودروها هنگام باز شدن دیالوگ
+  useEffect(() => {
+    if (!open) return
+    setCarsLoading(true)
+    fetchCars()
+      .then(setAllCars)
+      .catch(() => {})
+      .finally(() => setCarsLoading(false))
+  }, [open])
+
+  // بارگذاری لیست مدل‌ها هنگام رفتن به مرحله دوم
+  useEffect(() => {
+    if (step !== "info") return
+    setModelsLoading(true)
+    fetchModels()
+      .then(setAllModels)
+      .catch(() => {})
+      .finally(() => setModelsLoading(false))
+  }, [step])
+
+  // ------------------- فیلتر پلاک -------------------
+  const plateQuery = `${form.twoDigits}${form.letter !== "ب" ? form.letter : ""}${form.threeDigits}${form.region}`
+    .replace(/\s/g, "")
+    .toLowerCase()
+
+  const filteredCars = plateQuery.length < 1
+    ? []
+    : allCars.filter((c) => {
+        const pn = c.plate_number.toLowerCase()
+        const combined =
+          `${c.plate_first}${c.plate_letter}${c.plate_second}${c.plate_region}`.toLowerCase()
+        return pn.includes(plateQuery) || combined.includes(plateQuery)
+      })
+
+  // ------------------- فیلتر مدل -------------------
+  const filteredModels = modelSearch.length < 1
+    ? allModels.slice(0, 8)
+    : allModels.filter(
+        (m) =>
+          m.make.includes(modelSearch) ||
+          m.model.includes(modelSearch) ||
+          String(m.model_year).includes(modelSearch),
+      )
+
+  // ------------------- انتخاب ماشین از dropdown -------------------
+  const handleSelectCar = useCallback((car: ApiCar) => {
+    setSelectedCar(car)
+    setPlateDropOpen(false)
+    setForm({
+      twoDigits: String(car.plate_first),
+      letter: car.plate_letter,
+      threeDigits: String(car.plate_second),
+      region: String(car.plate_region),
+      color: "",
+      year: String(car.manufacturing_year),
+      ownerPhone: car.owner.phone,
+      mileage: String(car.last_mileage),
+      note: "",
+    })
+  }, [])
+
+  // ------------------- انتخاب مدل از dropdown -------------------
+  const handleSelectModel = useCallback((model: ApiCarModel) => {
+    setSelectedModel(model)
+    setIsNewModel(false)
+    setModelDropOpen(false)
+    setModelSearch(`${model.make} ${model.model} ${model.model_year}`)
+  }, [])
+
+  // ------------------- دوربین -------------------
   const stopCamera = () => {
     streamRef.current?.getTracks().forEach((t) => t.stop())
     streamRef.current = null
@@ -61,18 +166,15 @@ export function AddCarDialog() {
 
   const startCamera = async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "environment" },
-      })
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
       streamRef.current = stream
       if (videoRef.current) videoRef.current.srcObject = stream
       setCamActive(true)
     } catch {
-      alert("دسترسی به دوربین امکان‌پذیر نیست. لطفاً پلاک را دستی وارد کنید.")
+      alert("دسترسی به دوربین امکان‌پذیر نیست. پلاک را دستی وارد کنید.")
     }
   }
 
-  // شبیه‌سازی تشخیص پلاک از تصویر دوربین
   const capturePlate = () => {
     setScanning(true)
     setTimeout(() => {
@@ -86,226 +188,427 @@ export function AddCarDialog() {
     }, 1600)
   }
 
+  // ------------------- ریست -------------------
   const reset = () => {
-    setForm(empty)
+    setForm(emptyForm)
+    setSelectedCar(null)
+    setSelectedModel(null)
+    setIsNewModel(false)
+    setModelSearch("")
+    setNewModelForm(emptyModel)
+    setPlateDropOpen(false)
+    setModelDropOpen(false)
+    setStep("plate")
+    setSubmitError("")
     stopCamera()
   }
 
-  const canSubmit =
+  // ------------------- اعتبارسنجی -------------------
+  const plateValid =
     form.twoDigits.length >= 1 &&
     form.threeDigits.length >= 1 &&
-    form.region.length >= 1 &&
-    form.brand.trim().length > 0
+    form.region.length >= 1
 
-  const handleSubmit = () => {
-    if (!canSubmit) return
-    addCar({
-      plate: {
-        twoDigits: form.twoDigits,
-        letter: form.letter,
-        threeDigits: form.threeDigits,
-        region: form.region,
-      },
-      brand: form.brand,
-      model: form.model,
-      color: form.color,
-      year: form.year,
-      ownerName: form.ownerName,
-      ownerPhone: form.ownerPhone,
-      note: form.note,
-    })
-    reset()
-    setOpen(false)
+  const modelValid = selectedModel !== null || (isNewModel && newModelForm.make.trim() && newModelForm.model.trim() && newModelForm.model_year)
+
+  // ------------------- ارسال -------------------
+  const handleSubmit = async () => {
+    setSubmitting(true)
+    setSubmitError("")
+    try {
+      let modelId: number | undefined = selectedModel?.id
+
+      // اگر مدل جدیده، اول بساز
+      if (isNewModel && !selectedModel) {
+        const created = await createModel({
+          make: newModelForm.make,
+          model: newModelForm.model,
+          model_year: Number(newModelForm.model_year),
+          transmission_type: newModelForm.transmission_type,
+        })
+        modelId = created.id
+      }
+
+      const carPayload = {
+        plate_first: Number(form.twoDigits),
+        plate_letter: form.letter,
+        plate_second: Number(form.threeDigits),
+        plate_region: Number(form.region),
+        manufacturing_year: Number(form.year) || undefined,
+        last_mileage: Number(form.mileage) || undefined,
+        model: modelId,
+      }
+
+      let apiCar: ApiCar
+      if (selectedCar) {
+        // به‌روزرسانی ماشین موجود
+        apiCar = await updateCar(selectedCar.id, carPayload)
+      } else {
+        // ساخت ماشین جدید
+        apiCar = await createCar(carPayload)
+      }
+
+      // اضافه کردن به state داخلی گاراژ
+      addCar({
+        plate: {
+          twoDigits: form.twoDigits,
+          letter: form.letter,
+          threeDigits: form.threeDigits,
+          region: form.region,
+        },
+        brand: apiCar.model?.make ?? "",
+        model: apiCar.model?.model ?? "",
+        color: form.color,
+        year: form.year,
+        ownerName: "",
+        ownerPhone: form.ownerPhone,
+        note: form.note,
+      })
+
+      reset()
+      setOpen(false)
+    } catch (e: unknown) {
+      setSubmitError(e instanceof Error ? e.message : "خطایی رخ داد. دوباره تلاش کنید.")
+    } finally {
+      setSubmitting(false)
+    }
   }
 
+  // ------------------- رندر -------------------
   return (
-    <Dialog
-      open={open}
-      onOpenChange={(o) => {
-        setOpen(o)
-        if (!o) reset()
-      }}
-    >
+    <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) reset() }}>
       <DialogTrigger render={<Button size="lg" className="gap-2 font-semibold" />}>
         <Plus className="size-5" />
         ثبت خودروی جدید
       </DialogTrigger>
+
       <DialogContent className="max-h-[90vh] gap-0 overflow-y-auto sm:max-w-2xl">
         <DialogHeader className="text-right">
           <DialogTitle className="text-xl">ثبت خودروی ورودی به گاراژ</DialogTitle>
           <DialogDescription>
-            پلاک را با دوربین اسکن کنید یا به‌صورت دستی وارد نمایید.
+            {step === "plate"
+              ? "پلاک را با دوربین اسکن یا دستی وارد کنید، سپس از لیست انتخاب کنید یا خودروی جدید ثبت کنید."
+              : "اطلاعات خودرو و مدل را تکمیل کنید."}
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-6 py-4">
-          {/* بخش دوربین */}
-          <div className="rounded-xl border border-border bg-muted/30 p-4">
-            <div className="mb-3 flex items-center justify-between">
-              <span className="text-sm font-semibold text-muted-foreground">ثبت پلاک با دوربین</span>
-              {camActive ? (
-                <Button variant="ghost" size="sm" onClick={stopCamera} className="gap-1.5 text-destructive">
-                  <CameraOff className="size-4" />
-                  خاموش کردن
-                </Button>
-              ) : (
-                <Button variant="secondary" size="sm" onClick={startCamera} className="gap-1.5">
-                  <Camera className="size-4" />
-                  روشن کردن دوربین
-                </Button>
-              )}
-            </div>
-
-            {camActive && (
-              <div className="space-y-3">
-                <div className="relative overflow-hidden rounded-lg bg-black">
-                  {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
-                  <video ref={videoRef} autoPlay playsInline muted className="aspect-video w-full object-cover" />
-                  <div className="pointer-events-none absolute inset-x-8 top-1/2 h-20 -translate-y-1/2 rounded-lg border-2 border-dashed border-primary/80" />
-                </div>
-                <Button onClick={capturePlate} disabled={scanning} className="w-full gap-2">
-                  {scanning ? (
-                    <>
-                      <Loader2 className="size-4 animate-spin" />
-                      در حال تشخیص پلاک...
-                    </>
+        <div className="space-y-5 py-4">
+          {/* ====== مرحله ۱: پلاک ====== */}
+          {step === "plate" && (
+            <>
+              {/* دوربین */}
+              <div className="rounded-xl border border-border bg-muted/30 p-4">
+                <div className="mb-3 flex items-center justify-between">
+                  <span className="text-sm font-semibold text-muted-foreground">ثبت پلاک با دوربین</span>
+                  {camActive ? (
+                    <Button variant="ghost" size="sm" onClick={stopCamera} className="gap-1.5 text-destructive">
+                      <CameraOff className="size-4" /> خاموش کردن
+                    </Button>
                   ) : (
-                    <>
-                      <Camera className="size-4" />
-                      گرفتن عکس و تشخیص پلاک
-                    </>
+                    <Button variant="secondary" size="sm" onClick={startCamera} className="gap-1.5">
+                      <Camera className="size-4" /> روشن کردن دوربین
+                    </Button>
                   )}
-                </Button>
+                </div>
+                {camActive && (
+                  <div className="space-y-3">
+                    <div className="relative overflow-hidden rounded-lg bg-black">
+                      {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
+                      <video ref={videoRef} autoPlay playsInline muted className="aspect-video w-full object-cover" />
+                      <div className="pointer-events-none absolute inset-x-8 top-1/2 h-20 -translate-y-1/2 rounded-lg border-2 border-dashed border-primary/80" />
+                    </div>
+                    <Button onClick={capturePlate} disabled={scanning} className="w-full gap-2">
+                      {scanning ? <><Loader2 className="size-4 animate-spin" /> در حال تشخیص...</> : <><Camera className="size-4" /> گرفتن عکس و تشخیص پلاک</>}
+                    </Button>
+                  </div>
+                )}
               </div>
-            )}
 
-            {!camActive && (form.twoDigits || form.threeDigits) && (
-              <div className="flex items-center gap-2 text-sm text-primary">
-                <Check className="size-4" />
-                پلاک ثبت شد — در صورت نیاز ویرایش کنید.
+              {/* پیش‌نمایش پلاک */}
+              <div className="flex justify-center">
+                <LicensePlate
+                  plate={{
+                    twoDigits: form.twoDigits || "۰۰",
+                    letter: form.letter,
+                    threeDigits: form.threeDigits || "۰۰۰",
+                    region: form.region || "۰۰",
+                  }}
+                  size="lg"
+                />
               </div>
-            )}
-          </div>
 
-          {/* پیش‌نمایش پلاک */}
-          <div className="flex justify-center">
-            <LicensePlate
-              plate={{
-                twoDigits: form.twoDigits || "۰۰",
-                letter: form.letter,
-                threeDigits: form.threeDigits || "۰۰۰",
-                region: form.region || "۰۰",
-              }}
-              size="lg"
-            />
-          </div>
+              {/* ورود دستی پلاک */}
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                <div className="space-y-1.5">
+                  <Label>دو رقم</Label>
+                  <Input
+                    inputMode="numeric" maxLength={2}
+                    value={form.twoDigits}
+                    onChange={(e) => { set("twoDigits", e.target.value.replace(/\D/g, "")); setSelectedCar(null); setPlateDropOpen(true) }}
+                    placeholder="۱۲" className="text-center"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>حرف</Label>
+                  <Select value={form.letter} onValueChange={(v) => { set("letter", v); setSelectedCar(null) }}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {PLATE_LETTERS.map((l) => <SelectItem key={l} value={l}>{l}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label>سه رقم</Label>
+                  <Input
+                    inputMode="numeric" maxLength={3}
+                    value={form.threeDigits}
+                    onChange={(e) => { set("threeDigits", e.target.value.replace(/\D/g, "")); setSelectedCar(null); setPlateDropOpen(true) }}
+                    placeholder="۳۴۵" className="text-center"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>کد شهر</Label>
+                  <Input
+                    inputMode="numeric" maxLength={2}
+                    value={form.region}
+                    onChange={(e) => { set("region", e.target.value.replace(/\D/g, "")); setSelectedCar(null); setPlateDropOpen(true) }}
+                    placeholder="۱۱" className="text-center"
+                  />
+                </div>
+              </div>
 
-          {/* ورود دستی پلاک */}
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <div className="space-y-1.5">
-              <Label>دو رقم</Label>
-              <Input
-                inputMode="numeric"
-                maxLength={2}
-                value={form.twoDigits}
-                onChange={(e) => set("twoDigits", toFa(e.target.value.replace(/\D/g, "")))}
-                placeholder="۱۲"
-                className="text-center"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label>حرف</Label>
-              <Select value={form.letter} onValueChange={(v) => set("letter", v)}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {PLATE_LETTERS.map((l) => (
-                    <SelectItem key={l} value={l}>
-                      {l}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1.5">
-              <Label>سه رقم</Label>
-              <Input
-                inputMode="numeric"
-                maxLength={3}
-                value={form.threeDigits}
-                onChange={(e) => set("threeDigits", toFa(e.target.value.replace(/\D/g, "")))}
-                placeholder="۳۴۵"
-                className="text-center"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label>کد شهر</Label>
-              <Input
-                inputMode="numeric"
-                maxLength={2}
-                value={form.region}
-                onChange={(e) => set("region", toFa(e.target.value.replace(/\D/g, "")))}
-                placeholder="۱۱"
-                className="text-center"
-              />
-            </div>
-          </div>
+              {/* dropdown جستجوی پلاک */}
+              {plateDropOpen && (
+                <div className="rounded-xl border border-border bg-card shadow-lg">
+                  <div className="flex items-center gap-2 border-b border-border px-3 py-2">
+                    <Search className="size-4 text-muted-foreground" />
+                    <span className="text-sm text-muted-foreground">
+                      {carsLoading ? "در حال جستجو..." : filteredCars.length > 0 ? `${filteredCars.length} خودرو یافت شد` : "خودروی مطابق پیدا نشد"}
+                    </span>
+                    <button onClick={() => setPlateDropOpen(false)} className="mr-auto text-muted-foreground hover:text-foreground">
+                      <X className="size-4" />
+                    </button>
+                  </div>
+                  {carsLoading && (
+                    <div className="flex items-center justify-center py-6">
+                      <Loader2 className="size-5 animate-spin text-muted-foreground" />
+                    </div>
+                  )}
+                  {!carsLoading && filteredCars.length > 0 && (
+                    <ul className="max-h-52 overflow-y-auto divide-y divide-border">
+                      {filteredCars.map((car) => (
+                        <li key={car.id}>
+                          <button
+                            onClick={() => handleSelectCar(car)}
+                            className="w-full px-4 py-3 text-right transition-colors hover:bg-accent"
+                          >
+                            <div className="flex items-center justify-between gap-3">
+                              <div>
+                                <div className="font-semibold text-sm">
+                                  {car.model.make} {car.model.model}
+                                  <span className="mr-2 text-xs text-muted-foreground">{car.model.model_year}</span>
+                                </div>
+                                <div className="text-xs text-muted-foreground mt-0.5">
+                                  مالک: {car.owner.phone}
+                                  {car.last_mileage > 0 && ` · کارکرد: ${toFa(String(car.last_mileage))} کیلومتر`}
+                                </div>
+                              </div>
+                              <div className="shrink-0 rounded bg-muted px-2 py-1 font-mono text-xs text-foreground">
+                                {car.plate_number}
+                              </div>
+                            </div>
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  {!carsLoading && filteredCars.length === 0 && plateQuery.length > 0 && (
+                    <div className="px-4 py-4 text-sm text-muted-foreground text-center">
+                      خودرویی با این پلاک در سیستم ثبت نشده — می‌توانید خودروی جدید ثبت کنید.
+                    </div>
+                  )}
+                </div>
+              )}
 
-          <Separator />
+              {/* نمایش ماشین انتخاب‌شده */}
+              {selectedCar && (
+                <div className="flex items-center justify-between rounded-xl border border-primary/40 bg-primary/10 px-4 py-3">
+                  <div>
+                    <div className="font-semibold text-sm">
+                      {selectedCar.model.make} {selectedCar.model.model} — {selectedCar.model.model_year}
+                    </div>
+                    <div className="text-xs text-muted-foreground mt-0.5">
+                      {selectedCar.owner.phone} · کارکرد: {toFa(String(selectedCar.last_mileage))} کیلومتر
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="rounded bg-primary/20 px-2 py-1 font-mono text-xs">{selectedCar.plate_number}</span>
+                    <button onClick={() => { setSelectedCar(null); setForm(emptyForm) }} className="text-muted-foreground hover:text-destructive">
+                      <X className="size-4" />
+                    </button>
+                  </div>
+                </div>
+              )}
+            </>
+          )}
 
-          {/* اطلاعات خودرو */}
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <div className="space-y-1.5">
-              <Label>برند / نوع خودرو *</Label>
-              <Input value={form.brand} onChange={(e) => set("brand", e.target.value)} placeholder="مثلاً پژو" />
-            </div>
-            <div className="space-y-1.5">
-              <Label>مدل</Label>
-              <Input value={form.model} onChange={(e) => set("model", e.target.value)} placeholder="مثلاً ۲۰۶ تیپ ۵" />
-            </div>
-            <div className="space-y-1.5">
-              <Label>رنگ</Label>
-              <Input value={form.color} onChange={(e) => set("color", e.target.value)} placeholder="مثلاً سفید" />
-            </div>
-            <div className="space-y-1.5">
-              <Label>سال ساخت</Label>
-              <Input
-                inputMode="numeric"
-                value={form.year}
-                onChange={(e) => set("year", toFa(e.target.value.replace(/\D/g, "")))}
-                placeholder="۱۴۰۰"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label>نام مالک</Label>
-              <Input value={form.ownerName} onChange={(e) => set("ownerName", e.target.value)} placeholder="نام و نام خانوادگی" />
-            </div>
-            <div className="space-y-1.5">
-              <Label>شماره تماس</Label>
-              <Input
-                inputMode="numeric"
-                value={form.ownerPhone}
-                onChange={(e) => set("ownerPhone", toFa(e.target.value.replace(/\D/g, "")))}
-                placeholder="۰۹۱۲..."
-              />
-            </div>
-          </div>
+          {/* ====== مرحله ۲: اطلاعات خودرو ====== */}
+          {step === "info" && (
+            <>
+              {/* جستجوی مدل */}
+              <div className="space-y-1.5">
+                <Label>مدل خودرو *</Label>
+                <div className="relative">
+                  <Input
+                    value={modelSearch}
+                    onChange={(e) => { setModelSearch(e.target.value); setSelectedModel(null); setIsNewModel(false); setModelDropOpen(true) }}
+                    onFocus={() => setModelDropOpen(true)}
+                    placeholder="جستجو: ایران خودرو، پژو ۴۰۵، ۱۳۹۵..."
+                    className="pl-8"
+                  />
+                  <ChevronDown className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                </div>
+                {modelDropOpen && (
+                  <div className="rounded-xl border border-border bg-card shadow-lg">
+                    <div className="flex items-center gap-2 border-b border-border px-3 py-2">
+                      <Search className="size-4 text-muted-foreground" />
+                      <span className="text-sm text-muted-foreground">
+                        {modelsLoading ? "در حال بارگذاری..." : `${filteredModels.length} مدل`}
+                      </span>
+                      <button onClick={() => setModelDropOpen(false)} className="mr-auto text-muted-foreground hover:text-foreground">
+                        <X className="size-4" />
+                      </button>
+                    </div>
+                    {modelsLoading ? (
+                      <div className="flex items-center justify-center py-6">
+                        <Loader2 className="size-5 animate-spin text-muted-foreground" />
+                      </div>
+                    ) : (
+                      <ul className="max-h-44 overflow-y-auto divide-y divide-border">
+                        {filteredModels.map((m) => (
+                          <li key={m.id}>
+                            <button
+                              onClick={() => handleSelectModel(m)}
+                              className="w-full px-4 py-2.5 text-right text-sm transition-colors hover:bg-accent"
+                            >
+                              <span className="font-medium">{m.make} {m.model}</span>
+                              <span className="mr-2 text-xs text-muted-foreground">
+                                {m.model_year} · {m.transmission_type === "man" ? "دنده‌ای" : "اتوماتیک"}
+                              </span>
+                            </button>
+                          </li>
+                        ))}
+                        {/* ساخت مدل جدید */}
+                        <li>
+                          <button
+                            onClick={() => { setIsNewModel(true); setSelectedModel(null); setModelDropOpen(false) }}
+                            className="flex w-full items-center gap-2 px-4 py-2.5 text-right text-sm text-primary hover:bg-accent"
+                          >
+                            <Plus className="size-4" />
+                            ثبت مدل جدید: «{modelSearch || "..."}»
+                          </button>
+                        </li>
+                      </ul>
+                    )}
+                  </div>
+                )}
+                {/* نمایش مدل انتخاب‌شده */}
+                {selectedModel && (
+                  <div className="flex items-center justify-between rounded-lg border border-primary/40 bg-primary/10 px-3 py-2 text-sm">
+                    <span>{selectedModel.make} {selectedModel.model} — {selectedModel.model_year}</span>
+                    <button onClick={() => { setSelectedModel(null); setModelSearch("") }} className="text-muted-foreground hover:text-destructive">
+                      <X className="size-3.5" />
+                    </button>
+                  </div>
+                )}
+              </div>
 
-          <div className="space-y-1.5">
-            <Label>توضیحات اولیه / مشکل اعلام‌شده</Label>
-            <Input value={form.note} onChange={(e) => set("note", e.target.value)} placeholder="مثلاً صدای غیرعادی از موتور" />
-          </div>
+              {/* فرم مدل جدید */}
+              {isNewModel && (
+                <div className="rounded-xl border border-dashed border-primary/40 bg-primary/5 p-4 space-y-3">
+                  <p className="text-sm font-semibold text-primary">مشخصات مدل جدید</p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1.5">
+                      <Label>سازنده *</Label>
+                      <Input value={newModelForm.make} onChange={(e) => setNm("make", e.target.value)} placeholder="ایران خودرو" />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label>مدل *</Label>
+                      <Input value={newModelForm.model} onChange={(e) => setNm("model", e.target.value)} placeholder="پژو ۴۰۵" />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label>سال مدل *</Label>
+                      <Input inputMode="numeric" value={newModelForm.model_year} onChange={(e) => setNm("model_year", e.target.value.replace(/\D/g, ""))} placeholder="۱۳۹۵" />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label>گیربکس</Label>
+                      <Select value={newModelForm.transmission_type} onValueChange={(v) => setNm("transmission_type", v)}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="man">دنده‌ای</SelectItem>
+                          <SelectItem value="auto">اتوماتیک</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <Separator />
+
+              {/* اطلاعات تکمیلی */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label>رنگ</Label>
+                  <Input value={form.color} onChange={(e) => set("color", e.target.value)} placeholder="مثلاً سفید" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>سال ساخت</Label>
+                  <Input inputMode="numeric" value={form.year} onChange={(e) => set("year", e.target.value.replace(/\D/g, ""))} placeholder="۱۴۰۰" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>شماره تماس مالک</Label>
+                  <Input inputMode="numeric" value={form.ownerPhone} onChange={(e) => set("ownerPhone", e.target.value.replace(/\D/g, ""))} placeholder="۰۹۱۲..." />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>کارکرد (کیلومتر)</Label>
+                  <Input inputMode="numeric" value={form.mileage} onChange={(e) => set("mileage", e.target.value.replace(/\D/g, ""))} placeholder="۵۰۰۰۰" />
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <Label>مشکل اعلام‌شده / توضیحات</Label>
+                <Input value={form.note} onChange={(e) => set("note", e.target.value)} placeholder="مثلاً صدای غیرعادی از موتور" />
+              </div>
+
+              {submitError && (
+                <p className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">{submitError}</p>
+              )}
+            </>
+          )}
         </div>
 
         <DialogFooter className="gap-2 sm:gap-2">
-          <Button variant="outline" onClick={() => setOpen(false)}>
-            انصراف
+          <Button variant="outline" onClick={() => step === "plate" ? setOpen(false) : setStep("plate")}>
+            {step === "plate" ? "انصراف" : "مرحله قبل"}
           </Button>
-          <Button onClick={handleSubmit} disabled={!canSubmit} className="gap-2 font-semibold">
-            <Check className="size-4" />
-            ثبت خودرو در گاراژ
-          </Button>
+
+          {step === "plate" && (
+            <Button onClick={() => setStep("info")} disabled={!plateValid} className="gap-2 font-semibold">
+              ادامه — اطلاعات خودرو
+            </Button>
+          )}
+
+          {step === "info" && selectedCar && (
+            <Button onClick={handleSubmit} disabled={submitting || !modelValid} className="gap-2 font-semibold">
+              {submitting ? <><Loader2 className="size-4 animate-spin" /> در حال ذخیره...</> : <><Check className="size-4" /> به‌روزرسانی و ورود به گاراژ</>}
+            </Button>
+          )}
+
+          {step === "info" && !selectedCar && (
+            <Button onClick={handleSubmit} disabled={submitting || !modelValid} className="gap-2 font-semibold">
+              {submitting ? <><Loader2 className="size-4 animate-spin" /> در حال ذخیره...</> : <><Plus className="size-4" /> ثبت خودروی جدید</>}
+            </Button>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>
