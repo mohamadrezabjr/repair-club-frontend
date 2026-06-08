@@ -3,15 +3,33 @@ import type { ApiCar, ApiCarModel } from "@/lib/types"
 const BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? ""
 
 export async function fetchCars(): Promise<ApiCar[]> {
-  const res = await fetch(`${BASE_URL}/service/cars`, { cache: "no-store" })
-  if (!res.ok) throw new Error("خطا در دریافت لیست خودروها")
-  return res.json()
+  if (!BASE_URL) {
+    console.log("[v0] NEXT_PUBLIC_API_BASE_URL not set, fetchCars returning []")
+    return []
+  }
+  try {
+    const res = await fetch(`${BASE_URL}/service/cars`, { cache: "no-store" })
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    return res.json()
+  } catch (err) {
+    console.error("[v0] fetchCars failed:", err)
+    return []
+  }
 }
 
 export async function fetchModels(): Promise<ApiCarModel[]> {
-  const res = await fetch(`${BASE_URL}/service/models`, { cache: "no-store" })
-  if (!res.ok) throw new Error("خطا در دریافت لیست مدل‌ها")
-  return res.json()
+  if (!BASE_URL) {
+    console.log("[v0] NEXT_PUBLIC_API_BASE_URL not set, fetchModels returning []")
+    return []
+  }
+  try {
+    const res = await fetch(`${BASE_URL}/service/models`, { cache: "no-store" })
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    return res.json()
+  } catch (err) {
+    console.error("[v0] fetchModels failed:", err)
+    return []
+  }
 }
 
 export async function createCar(body: Partial<ApiCar>): Promise<ApiCar> {

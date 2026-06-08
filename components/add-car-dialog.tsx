@@ -92,9 +92,15 @@ export function AddCarDialog() {
   useEffect(() => {
     if (!open) return
     setCarsLoading(true)
+    console.log("[v0] fetchCars starting")
     fetchCars()
-      .then(setAllCars)
-      .catch(() => {})
+      .then((data) => {
+        console.log("[v0] fetchCars success:", data.length, "cars")
+        setAllCars(data)
+      })
+      .catch((err) => {
+        console.error("[v0] fetchCars error:", err)
+      })
       .finally(() => setCarsLoading(false))
   }, [open])
 
@@ -102,9 +108,15 @@ export function AddCarDialog() {
   useEffect(() => {
     if (step !== "info") return
     setModelsLoading(true)
+    console.log("[v0] fetchModels starting")
     fetchModels()
-      .then(setAllModels)
-      .catch(() => {})
+      .then((data) => {
+        console.log("[v0] fetchModels success:", data.length, "models")
+        setAllModels(data)
+      })
+      .catch((err) => {
+        console.error("[v0] fetchModels error:", err)
+      })
       .finally(() => setModelsLoading(false))
   }, [step])
 
