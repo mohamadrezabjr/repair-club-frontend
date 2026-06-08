@@ -38,6 +38,35 @@ export interface Car {
   parts: PartItem[]
 }
 
+// تایپ‌های API
+export interface ApiCarOwner {
+  id: string
+  phone: string
+  profile: null | Record<string, unknown>
+}
+
+export interface ApiCarModel {
+  id: number
+  make: string
+  model: string
+  model_year: number
+  transmission_type: string
+}
+
+export interface ApiCar {
+  id: number
+  owner: ApiCarOwner
+  model: ApiCarModel
+  manufacturing_year: number
+  in_garage: boolean
+  last_mileage: number
+  plate_first: number
+  plate_letter: string
+  plate_second: number
+  plate_region: number
+  plate_number: string
+}
+
 export const PLATE_LETTERS = [
   "الف",
   "ب",
