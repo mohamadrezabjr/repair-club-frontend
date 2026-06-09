@@ -62,8 +62,8 @@ export interface ApiCarModel {
 
 export interface ApiCar {
   id: number
-  owner: ApiCarOwner
-  model: ApiCarModel
+  owner: ApiCarOwner | null
+  model: ApiCarModel | null
   manufacturing_year: number
   last_mileage: number
   plate_first: number

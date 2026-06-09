@@ -159,23 +159,28 @@ export function AddCarDialog() {
       threeDigits: String(car.plate_second),
       region: String(car.plate_region),
       color: "",
-      year: String(car.manufacturing_year),
-      ownerPhone: car.owner.phone,
-      ownerFirstName: car.owner.profile?.first_name ?? "",
-      ownerLastName: car.owner.profile?.last_name ?? "",
-      ownerEmail: car.owner.profile?.email ?? "",
-      mileage: String(car.last_mileage),
+      year: String(car.manufacturing_year ?? ""),
+      ownerPhone: car.owner?.phone ?? "",
+      ownerFirstName: car.owner?.profile?.first_name ?? "",
+      ownerLastName: car.owner?.profile?.last_name ?? "",
+      ownerEmail: car.owner?.profile?.email ?? "",
+      mileage: String(car.last_mileage ?? ""),
       note: "",
     })
     // پر کردن فرم ادیت مدل با اطلاعات مدل فعلی ماشین
-    setSelectedModel(car.model)
-    setModelSearch(`${car.model.make} ${car.model.model} ${car.model.model_year}`)
-    setEditModelForm({
-      make: car.model.make,
-      model: car.model.model,
-      model_year: String(car.model.model_year),
-      transmission_type: (car.model.transmission_type as "man" | "auto") ?? "man",
-    })
+    setSelectedModel(car.model ?? null)
+    if (car.model) {
+      setModelSearch(`${car.model.make} ${car.model.model} ${car.model.model_year}`)
+      setEditModelForm({
+        make: car.model.make,
+        model: car.model.model,
+        model_year: String(car.model.model_year),
+        transmission_type: (car.model.transmission_type as "man" | "auto") ?? "man",
+      })
+    } else {
+      setModelSearch("")
+      setEditModelForm(emptyModel)
+    }
   }, [])
 
   // ------------------- انتخاب مدل از dropdown -------------------
@@ -315,8 +320,8 @@ export function AddCarDialog() {
 
         // اضافه کردن به state داخلی گاراژ
         const ownerFullName = [
-          selectedCar.owner.profile?.first_name,
-          selectedCar.owner.profile?.last_name,
+          selectedCar.owner?.profile?.first_name,
+          selectedCar.owner?.profile?.last_name,
         ].filter(Boolean).join(" ")
         addCar({
           plate: {
@@ -328,10 +333,10 @@ export function AddCarDialog() {
           brand: selectedCar.model?.make ?? "",
           model: selectedCar.model?.model ?? "",
           color: form.color,
-          year: String(selectedCar.manufacturing_year),
+          year: String(selectedCar.manufacturing_year ?? ""),
           ownerName: ownerFullName,
-          ownerPhone: selectedCar.owner.phone,
-          ownerEmail: selectedCar.owner.profile?.email,
+          ownerPhone: selectedCar.owner?.phone ?? "",
+          ownerEmail: selectedCar.owner?.profile?.email,
           note: form.note,
         })
       } else {
@@ -526,12 +531,12 @@ export function AddCarDialog() {
                             <div className="flex items-center justify-between gap-3">
                               <div>
                                 <div className="font-semibold text-sm">
-                                  {car.model.make} {car.model.model}
-                                  <span className="mr-2 text-xs text-muted-foreground">{car.model.model_year}</span>
+                                  {car.model ? `${car.model.make} ${car.model.model}` : "مدل نامشخص"}
+                                  {car.model && <span className="mr-2 text-xs text-muted-foreground">{car.model.model_year}</span>}
                                 </div>
                                 <div className="text-xs text-muted-foreground mt-0.5">
-                                  مالک: {car.owner.phone}
-                                  {car.last_mileage > 0 && ` · کارکرد: ${toFa(String(car.last_mileage))} کیلومتر`}
+                                  {car.owner ? `مالک: ${car.owner.phone}` : "مالک نامشخص"}
+                                  {(car.last_mileage ?? 0) > 0 && ` · کارکرد: ${toFa(String(car.last_mileage))} کیلومتر`}
                                 </div>
                               </div>
                               <div className="shrink-0 rounded bg-muted px-2 py-1 font-mono text-xs text-foreground">
@@ -556,10 +561,12 @@ export function AddCarDialog() {
                 <div className="flex items-center justify-between rounded-xl border border-primary/40 bg-primary/10 px-4 py-3">
                   <div>
                     <div className="font-semibold text-sm">
-                      {selectedCar.model.make} {selectedCar.model.model} — {selectedCar.model.model_year}
+                      {selectedCar.model
+                        ? `${selectedCar.model.make} ${selectedCar.model.model} — ${selectedCar.model.model_year}`
+                        : "مدل نامشخص"}
                     </div>
                     <div className="text-xs text-muted-foreground mt-0.5">
-                      {selectedCar.owner.phone} · کارکرد: {toFa(String(selectedCar.last_mileage))} کیلومتر
+                      {selectedCar.owner?.phone ?? "مالک نامشخص"} · کارکرد: {toFa(String(selectedCar.last_mileage ?? 0))} کیلومتر
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
@@ -688,7 +695,7 @@ export function AddCarDialog() {
                       </div>
                     ) : (
                       <div className="grid grid-cols-2 gap-x-6 gap-y-1.5 text-sm">
-                        {selectedCar.owner.profile?.first_name && (
+                        {selectedCar.owner?.profile?.first_name && (
                           <div className="flex gap-2">
                             <span className="text-muted-foreground">نام:</span>
                             <span className="font-medium">
@@ -698,9 +705,9 @@ export function AddCarDialog() {
                         )}
                         <div className="flex gap-2">
                           <span className="text-muted-foreground">تلفن:</span>
-                          <span className="font-medium">{toFa(selectedCar.owner.phone)}</span>
+                          <span className="font-medium">{toFa(selectedCar.owner?.phone ?? "—")}</span>
                         </div>
-                        {selectedCar.owner.profile?.email && (
+                        {selectedCar.owner?.profile?.email && (
                           <div className="flex gap-2 col-span-2">
                             <span className="text-muted-foreground">ایمیل:</span>
                             <span className="font-medium">{selectedCar.owner.profile.email}</span>
