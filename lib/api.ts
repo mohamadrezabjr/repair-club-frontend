@@ -32,7 +32,19 @@ export async function fetchModels(): Promise<ApiCarModel[]> {
   }
 }
 
-export async function createCar(body: Partial<ApiCar>): Promise<ApiCar> {
+export interface CreateCarPayload {
+  owner?: string
+  model: number
+  manufacturing_year?: number
+  in_garage: boolean
+  last_mileage?: number
+  plate_first: number
+  plate_letter: string
+  plate_second: number
+  plate_region: number
+}
+
+export async function createCar(body: CreateCarPayload): Promise<ApiCar> {
   const res = await fetch(`${BASE_URL}/service/cars`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -59,5 +71,25 @@ export async function createModel(body: Omit<ApiCarModel, "id">): Promise<ApiCar
     body: JSON.stringify(body),
   })
   if (!res.ok) throw new Error("خطا در ایجاد مدل")
+  return res.json()
+}
+
+export async function updateModel(id: number, body: Partial<Omit<ApiCarModel, "id">>): Promise<ApiCarModel> {
+  const res = await fetch(`${BASE_URL}/service/models/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  })
+  if (!res.ok) throw new Error("خطا در به‌روزرسانی مدل")
+  return res.json()
+}
+
+export async function createVisit(carId: number, description: string): Promise<unknown> {
+  const res = await fetch(`${BASE_URL}/service/visits/create`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ car: carId, description }),
+  })
+  if (!res.ok) throw new Error("خطا در ثبت ویزیت")
   return res.json()
 }
