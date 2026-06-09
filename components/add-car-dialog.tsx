@@ -37,6 +37,9 @@ const emptyForm = {
   color: "",
   year: "",
   ownerPhone: "",
+  ownerFirstName: "",
+  ownerLastName: "",
+  ownerEmail: "",
   mileage: "",
   note: "",
 }
@@ -158,6 +161,9 @@ export function AddCarDialog() {
       color: "",
       year: String(car.manufacturing_year),
       ownerPhone: car.owner.phone,
+      ownerFirstName: car.owner.profile?.first_name ?? "",
+      ownerLastName: car.owner.profile?.last_name ?? "",
+      ownerEmail: car.owner.profile?.email ?? "",
       mileage: String(car.last_mileage),
       note: "",
     })
@@ -286,60 +292,32 @@ export function AddCarDialog() {
       let finalCarId: number
 
       if (selectedCar) {
-        // ماشین موجود — فقط visit ساخته می‌شه
+        // ماشین موجود — آپدیت مدل (اگر تغییر کرده) و سپس visit
         finalCarId = selectedCar.id
-      } else {
-        // ماشین جدید — ابتدا مدل، سپس ماشین
-        let modelId: number
-
-        if (isNewModel || !selectedModel) {
-          // POST مدل جدید
+        const updatePayload: UpdateCarPayload = {}
+        if (form.year) updatePayload.manufacturing_year = Number(form.year)
+        if (form.mileage) updatePayload.last_mileage = Number(form.mileage)
+        // اگر مدل جدیدی انتخاب یا ساخته شده، آن را هم آپدیت کن
+        if (isNewModel) {
           const createdModel = await createModel({
             make: newModelForm.make,
             model: newModelForm.model,
             model_year: Number(newModelForm.model_year),
             transmission_type: newModelForm.transmission_type,
           })
-          modelId = createdModel.id
-        } else {
-          modelId = selectedModel.id
+          updatePayload.model = createdModel.id
+        } else if (selectedModel && selectedModel.id !== selectedCar.model?.id) {
+          updatePayload.model = selectedModel.id
         }
-
-        // POST ماشین جدید با modelId
-        const carPayload: CreateCarPayload = {
-          model: modelId,
-          plate_first: Number(form.twoDigits),
-          plate_letter: form.letter,
-          plate_second: Number(form.threeDigits),
-          plate_region: Number(form.region),
-          in_garage: true,
-          ...(form.ownerPhone && { owner: form.ownerPhone }),
-          ...(form.year && { manufacturing_year: Number(form.year) }),
-          ...(form.mileage && { last_mileage: Number(form.mileage) }),
+        if (Object.keys(updatePayload).length > 0) {
+          await updateCar(selectedCar.id, updatePayload)
         }
-        const createdCar = await createCar(carPayload)
-        finalCarId = createdCar.id
 
         // اضافه کردن به state داخلی گاراژ
-        addCar({
-          plate: {
-            twoDigits: form.twoDigits,
-            letter: form.letter,
-            threeDigits: form.threeDigits,
-            region: form.region,
-          },
-          brand: createdCar.model?.make ?? newModelForm.make,
-          model: createdCar.model?.model ?? newModelForm.model,
-          color: form.color,
-          year: form.year,
-          ownerName: "",
-          ownerPhone: form.ownerPhone,
-          note: form.note,
-        })
-      }
-
-      if (selectedCar) {
-        // ماشین موجود — اضافه کردن به state داخلی گاراژ
+        const ownerFullName = [
+          selectedCar.owner.profile?.first_name,
+          selectedCar.owner.profile?.last_name,
+        ].filter(Boolean).join(" ")
         addCar({
           plate: {
             twoDigits: String(selectedCar.plate_first),
@@ -351,8 +329,56 @@ export function AddCarDialog() {
           model: selectedCar.model?.model ?? "",
           color: form.color,
           year: String(selectedCar.manufacturing_year),
-          ownerName: "",
+          ownerName: ownerFullName,
           ownerPhone: selectedCar.owner.phone,
+          ownerEmail: selectedCar.owner.profile?.email,
+          note: form.note,
+        })
+      } else {
+        // ماشین جدید — ابتدا مدل، سپس ماشین
+        let modelId: number
+
+        if (isNewModel || !selectedModel) {
+          const createdModel = await createModel({
+            make: newModelForm.make,
+            model: newModelForm.model,
+            model_year: Number(newModelForm.model_year),
+            transmission_type: newModelForm.transmission_type,
+          })
+          modelId = createdModel.id
+        } else {
+          modelId = selectedModel.id
+        }
+
+        // POST ماشین جدید
+        const carPayload: CreateCarPayload = {
+          model: modelId,
+          plate_first: Number(form.twoDigits),
+          plate_letter: form.letter,
+          plate_second: Number(form.threeDigits),
+          plate_region: Number(form.region),
+          ...(form.ownerPhone && { owner: form.ownerPhone }),
+          ...(form.year && { manufacturing_year: Number(form.year) }),
+          ...(form.mileage && { last_mileage: Number(form.mileage) }),
+        }
+        const createdCar = await createCar(carPayload)
+        finalCarId = createdCar.id
+
+        const ownerFullName = [form.ownerFirstName, form.ownerLastName].filter(Boolean).join(" ")
+        addCar({
+          plate: {
+            twoDigits: form.twoDigits,
+            letter: form.letter,
+            threeDigits: form.threeDigits,
+            region: form.region,
+          },
+          brand: createdCar.model?.make ?? newModelForm.make,
+          model: createdCar.model?.model ?? newModelForm.model,
+          color: form.color,
+          year: form.year,
+          ownerName: ownerFullName,
+          ownerPhone: form.ownerPhone,
+          ownerEmail: form.ownerEmail || undefined,
           note: form.note,
         })
       }
@@ -662,10 +688,24 @@ export function AddCarDialog() {
                       </div>
                     ) : (
                       <div className="grid grid-cols-2 gap-x-6 gap-y-1.5 text-sm">
+                        {selectedCar.owner.profile?.first_name && (
+                          <div className="flex gap-2">
+                            <span className="text-muted-foreground">نام:</span>
+                            <span className="font-medium">
+                              {selectedCar.owner.profile.first_name} {selectedCar.owner.profile.last_name}
+                            </span>
+                          </div>
+                        )}
                         <div className="flex gap-2">
-                          <span className="text-muted-foreground">مالک:</span>
-                          <span className="font-medium">{selectedCar.owner.phone}</span>
+                          <span className="text-muted-foreground">تلفن:</span>
+                          <span className="font-medium">{toFa(selectedCar.owner.phone)}</span>
                         </div>
+                        {selectedCar.owner.profile?.email && (
+                          <div className="flex gap-2 col-span-2">
+                            <span className="text-muted-foreground">ایمیل:</span>
+                            <span className="font-medium">{selectedCar.owner.profile.email}</span>
+                          </div>
+                        )}
                         <div className="flex gap-2">
                           <span className="text-muted-foreground">کارکرد:</span>
                           <span className="font-medium">{toFa(String(selectedCar.last_mileage))} کیلومتر</span>
@@ -673,10 +713,6 @@ export function AddCarDialog() {
                         <div className="flex gap-2">
                           <span className="text-muted-foreground">سال ساخت:</span>
                           <span className="font-medium">{toFa(String(selectedCar.manufacturing_year))}</span>
-                        </div>
-                        <div className="flex gap-2">
-                          <span className="text-muted-foreground">وضعیت:</span>
-                          <span className="font-medium">{selectedCar.in_garage ? "در گاراژ" : "خارج"}</span>
                         </div>
                       </div>
                     )}
@@ -807,8 +843,20 @@ export function AddCarDialog() {
                       <Input inputMode="numeric" value={form.year} onChange={(e) => set("year", e.target.value.replace(/\D/g, ""))} placeholder="۱۴۰۰" />
                     </div>
                     <div className="space-y-1.5">
+                      <Label>نام مالک</Label>
+                      <Input value={form.ownerFirstName} onChange={(e) => set("ownerFirstName", e.target.value)} placeholder="علی" />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label>نام خانوادگی مالک</Label>
+                      <Input value={form.ownerLastName} onChange={(e) => set("ownerLastName", e.target.value)} placeholder="محمدی" />
+                    </div>
+                    <div className="space-y-1.5">
                       <Label>شماره تماس مالک</Label>
                       <Input inputMode="numeric" value={form.ownerPhone} onChange={(e) => set("ownerPhone", e.target.value.replace(/\D/g, ""))} placeholder="۰۹۱۲..." />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label>ایمیل مالک</Label>
+                      <Input type="email" value={form.ownerEmail} onChange={(e) => set("ownerEmail", e.target.value)} placeholder="ali@gmail.com" />
                     </div>
                     <div className="space-y-1.5">
                       <Label>کارکرد (کیلومتر)</Label>

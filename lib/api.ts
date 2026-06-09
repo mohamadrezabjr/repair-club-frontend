@@ -28,7 +28,6 @@ export interface CreateCarPayload {
   owner?: string
   model: number
   manufacturing_year?: number
-  in_garage: boolean
   last_mileage?: number
   plate_first: number
   plate_letter: string
@@ -50,7 +49,6 @@ export interface UpdateCarPayload {
   manufacturing_year?: number
   last_mileage?: number
   model?: number
-  in_garage?: boolean
 }
 
 export async function updateCar(id: number, body: UpdateCarPayload): Promise<ApiCar> {
