@@ -4,6 +4,7 @@ import { useState } from "react"
 import {
   CircleDot,
   Clock,
+  Mail,
   Package,
   Phone,
   Plus,
@@ -113,6 +114,14 @@ export function CarDetailSheet({
               value={car.ownerPhone ? toFa(car.ownerPhone) : "—"}
               icon={<Phone className="size-3.5" />}
             />
+            {car.ownerEmail && (
+              <InfoRow
+                label="ایمیل"
+                value={car.ownerEmail}
+                icon={<Mail className="size-3.5" />}
+                className="col-span-2 sm:col-span-3"
+              />
+            )}
           </div>
           {car.note && (
             <p className="rounded-lg border border-border bg-background p-3 text-sm text-muted-foreground">
@@ -311,13 +320,15 @@ function InfoRow({
   label,
   value,
   icon,
+  className,
 }: {
   label: string
   value: string
   icon?: React.ReactNode
+  className?: string
 }) {
   return (
-    <div className="flex flex-col gap-0.5">
+    <div className={cn("flex flex-col gap-0.5", className)}>
       <span className="flex items-center gap-1 text-xs text-muted-foreground">
         {icon}
         {label}

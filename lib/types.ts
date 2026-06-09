@@ -32,6 +32,7 @@ export interface Car {
   year: string
   ownerName: string
   ownerPhone: string
+  ownerEmail?: string
   entryAt: number // timestamp
   note?: string
   services: ServiceItem[]
@@ -39,10 +40,16 @@ export interface Car {
 }
 
 // تایپ‌های API
+export interface ApiCarOwnerProfile {
+  first_name: string
+  last_name: string
+  email: string
+}
+
 export interface ApiCarOwner {
   id: string
   phone: string
-  profile: null | Record<string, unknown>
+  profile: ApiCarOwnerProfile | null
 }
 
 export interface ApiCarModel {
@@ -58,7 +65,6 @@ export interface ApiCar {
   owner: ApiCarOwner
   model: ApiCarModel
   manufacturing_year: number
-  in_garage: boolean
   last_mileage: number
   plate_first: number
   plate_letter: string
