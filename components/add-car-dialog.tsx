@@ -26,7 +26,7 @@ import { PLATE_LETTERS, type ApiCar, type ApiCarModel } from "@/lib/types"
 import { toFa } from "@/lib/format"
 import { useGarage } from "@/components/garage-provider"
 import { LicensePlate } from "@/components/license-plate"
-import { fetchCars, fetchModels, createCar, updateCar, createModel, updateModel, createVisit, type CreateCarPayload } from "@/lib/api"
+import { fetchCars, fetchModels, createCar, updateCar, createModel, updateModel, createVisit, type CreateCarPayload, type UpdateCarPayload } from "@/lib/api"
 
 // ------------------- state اولیه -------------------
 const emptyForm = {
@@ -266,10 +266,10 @@ export function AddCarDialog() {
     setSubmitting(true)
     setSubmitError("")
     try {
-      await updateCar(selectedCar.id, {
-        manufacturing_year: Number(form.year) || undefined,
-        last_mileage: Number(form.mileage) || undefined,
-      })
+      const payload: UpdateCarPayload = {}
+      if (form.year) payload.manufacturing_year = Number(form.year)
+      if (form.mileage) payload.last_mileage = Number(form.mileage)
+      await updateCar(selectedCar.id, payload)
       setEditingCar(false)
     } catch (e: unknown) {
       setSubmitError(e instanceof Error ? e.message : "خطا در به‌روزرسانی خودرو")
@@ -445,7 +445,7 @@ export function AddCarDialog() {
                 </div>
                 <div className="space-y-1.5">
                   <Label>حرف</Label>
-                  <Select value={form.letter} onValueChange={(v) => { set("letter", v); setSelectedCar(null) }}>
+                  <Select value={form.letter} onValueChange={(v) => { set("letter", v ?? "ب"); setSelectedCar(null) }}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
                       {PLATE_LETTERS.map((l) => <SelectItem key={l} value={l}>{l}</SelectItem>)}
@@ -592,7 +592,7 @@ export function AddCarDialog() {
                           </div>
                           <div className="space-y-1.5">
                             <Label>گیربکس</Label>
-                            <Select value={editModelForm.transmission_type} onValueChange={(v) => setEm("transmission_type", v)}>
+                            <Select value={editModelForm.transmission_type} onValueChange={(v) => setEm("transmission_type", v ?? "man")}>
                               <SelectTrigger><SelectValue /></SelectTrigger>
                               <SelectContent>
                                 <SelectItem value="man">دنده‌ای</SelectItem>
@@ -782,7 +782,7 @@ export function AddCarDialog() {
                         </div>
                         <div className="space-y-1.5">
                           <Label>گیربکس</Label>
-                          <Select value={newModelForm.transmission_type} onValueChange={(v) => setNm("transmission_type", v)}>
+                          <Select value={newModelForm.transmission_type} onValueChange={(v) => setNm("transmission_type", v ?? "man")}>
                             <SelectTrigger><SelectValue /></SelectTrigger>
                             <SelectContent>
                               <SelectItem value="man">دنده‌ای</SelectItem>
