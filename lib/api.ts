@@ -1,4 +1,4 @@
-import type { ApiCar, ApiCarModel } from "@/lib/types"
+import type { ApiCar, ApiCarModel, ApiUser } from "@/lib/types"
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? ""
 
@@ -78,6 +78,38 @@ export async function updateModel(id: number, body: Partial<Omit<ApiCarModel, "i
     body: JSON.stringify(body),
   })
   if (!res.ok) throw new Error("خطا در به‌روزرسانی مدل")
+  return res.json()
+}
+
+// جستجوی یوزر با شماره — اگه پیدا نشد null برمی‌گردونه
+export async function fetchUserByPhone(phone: string): Promise<ApiUser | null> {
+  if (!BASE_URL) return null
+  try {
+    const res = await fetch(`${BASE_URL}/service/users?phone=${encodeURIComponent(phone)}`, { cache: "no-store" })
+    if (!res.ok) return null
+    const data = await res.json()
+    // ممکنه آرایه بیاد یا تک آبجکت
+    if (Array.isArray(data)) return data.length > 0 ? data[0] : null
+    return data ?? null
+  } catch {
+    return null
+  }
+}
+
+export interface CreateUserPayload {
+  phone: string
+  first_name?: string
+  last_name?: string
+  email?: string
+}
+
+export async function createUser(body: CreateUserPayload): Promise<ApiUser> {
+  const res = await fetch(`${BASE_URL}/service/users`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  })
+  if (!res.ok) throw new Error("خطا در ایجاد کاربر")
   return res.json()
 }
 
