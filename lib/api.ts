@@ -36,7 +36,7 @@ export interface CreateCarPayload {
 }
 
 export async function createCar(body: CreateCarPayload): Promise<ApiCar> {
-  const res = await fetch(`${BASE_URL}/service/cars`, {
+  const res = await fetch(`${BASE_URL}/service/cars/create`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
@@ -62,7 +62,7 @@ export async function updateCar(id: number, body: UpdateCarPayload): Promise<Api
 }
 
 export async function createModel(body: Omit<ApiCarModel, "id">): Promise<ApiCarModel> {
-  const res = await fetch(`${BASE_URL}/service/models/`, {
+  const res = await fetch(`${BASE_URL}/service/models/create/`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
