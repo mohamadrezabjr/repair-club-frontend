@@ -8,7 +8,7 @@ export async function fetchCars(): Promise<ApiCar[]> {
     return []
   }
   try {
-    const res = await fetch(`${BASE_URL}/service/cars`, { cache: "no-store" })
+    const res = await fetch(`${BASE_URL}/service/cars/`, { cache: "no-store" })
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
     return res.json()
   } catch (err) {
@@ -23,7 +23,7 @@ export async function fetchModels(): Promise<ApiCarModel[]> {
     return []
   }
   try {
-    const res = await fetch(`${BASE_URL}/service/models`, { cache: "no-store" })
+    const res = await fetch(`${BASE_URL}/service/models/`, { cache: "no-store" })
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
     return res.json()
   } catch (err) {
@@ -33,7 +33,7 @@ export async function fetchModels(): Promise<ApiCarModel[]> {
 }
 
 export async function createCar(body: Partial<ApiCar>): Promise<ApiCar> {
-  const res = await fetch(`${BASE_URL}/service/cars`, {
+  const res = await fetch(`${BASE_URL}/service/cars/`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
@@ -53,7 +53,7 @@ export async function updateCar(id: number, body: Partial<ApiCar>): Promise<ApiC
 }
 
 export async function createModel(body: Omit<ApiCarModel, "id">): Promise<ApiCarModel> {
-  const res = await fetch(`${BASE_URL}/service/models`, {
+  const res = await fetch(`${BASE_URL}/service/models/`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
