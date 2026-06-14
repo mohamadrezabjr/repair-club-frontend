@@ -40,6 +40,12 @@ export interface Car {
 }
 
 // تایپ‌های API
+export interface ApiUser {
+  id: string
+  phone: string
+  profile: ApiCarOwnerProfile | null
+}
+
 export interface ApiCarOwnerProfile {
   first_name: string
   last_name: string
