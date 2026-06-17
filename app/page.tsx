@@ -1,10 +1,9 @@
-import { GarageProvider } from "@/components/garage-provider"
-import { GarageDashboard } from "@/components/garage-dashboard"
+import { redirect } from "next/navigation"
 
-export default function Page() {
-  return (
-    <GarageProvider>
-      <GarageDashboard />
-    </GarageProvider>
-  )
+/**
+ * Root route — immediately redirect to the login page.
+ * Authenticated admins will be redirected to /garage by the login flow.
+ */
+export default function RootPage() {
+  redirect("/login")
 }

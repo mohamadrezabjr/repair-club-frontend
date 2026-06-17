@@ -2,6 +2,8 @@ import { Analytics } from '@vercel/analytics/next'
 import type { Metadata } from 'next'
 import { Vazirmatn } from 'next/font/google'
 import './globals.css'
+import { AuthProvider } from '@/components/auth-provider'
+import { Toaster } from '@/components/ui/sonner'
 
 const vazirmatn = Vazirmatn({
   variable: '--font-vazir',
@@ -23,7 +25,10 @@ export default function RootLayout({
   return (
     <html lang="fa" dir="rtl" className={`${vazirmatn.variable} dark`}>
       <body className="font-sans antialiased bg-background">
-        {children}
+        <AuthProvider>
+          {children}
+          <Toaster richColors position="top-center" />
+        </AuthProvider>
         {process.env.NODE_ENV === 'production' && <Analytics />}
       </body>
     </html>

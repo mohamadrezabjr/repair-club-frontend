@@ -39,6 +39,14 @@ export interface Car {
   parts: PartItem[]
 }
 
+// تایپ‌های Auth
+export interface AuthUser {
+  id: string
+  phone: string
+  profile: { first_name: string; last_name: string; email: string }
+  role: "admin" | "user"
+}
+
 // تایپ‌های API
 export interface ApiUser {
   id: string
