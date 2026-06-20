@@ -3,7 +3,7 @@ import { http } from "@/lib/http"
 
 export async function fetchCars(): Promise<ApiCar[]> {
   try {
-    const { data } = await http.get<ApiCar[]>("service/cars/")
+    const { data } = await http.get<ApiCar[]>("garage/cars/")
     return data
   } catch {
     return []
@@ -12,7 +12,7 @@ export async function fetchCars(): Promise<ApiCar[]> {
 
 export async function fetchModels(): Promise<ApiCarModel[]> {
   try {
-    const { data } = await http.get<ApiCarModel[]>("service/models/")
+    const { data } = await http.get<ApiCarModel[]>("garage/models/")
     return data
   } catch {
     return []
@@ -31,7 +31,7 @@ export interface CreateCarPayload {
 }
 
 export async function createCar(body: CreateCarPayload): Promise<ApiCar> {
-  const { data } = await http.post<ApiCar>("service/cars/create", body)
+  const { data } = await http.post<ApiCar>("garage/cars/", body)
   return data
 }
 
@@ -42,17 +42,17 @@ export interface UpdateCarPayload {
 }
 
 export async function updateCar(id: number, body: UpdateCarPayload): Promise<ApiCar> {
-  const { data } = await http.patch<ApiCar>(`service/cars/${id}`, body)
+  const { data } = await http.patch<ApiCar>(`garage/cars/${id}`, body)
   return data
 }
 
 export async function createModel(body: Omit<ApiCarModel, "id">): Promise<ApiCarModel> {
-  const { data } = await http.post<ApiCarModel>("service/models/create/", body)
+  const { data } = await http.post<ApiCarModel>("garage/models/", body)
   return data
 }
 
 export async function updateModel(id: number, body: Partial<Omit<ApiCarModel, "id">>): Promise<ApiCarModel> {
-  const { data } = await http.patch<ApiCarModel>(`service/models/${id}`, body)
+  const { data } = await http.patch<ApiCarModel>(`garage/models/${id}`, body)
   return data
 }
 
@@ -82,7 +82,7 @@ export async function createUser(body: CreateUserPayload): Promise<ApiUser> {
 }
 
 export async function createVisit(carId: number, description: string): Promise<unknown> {
-  const { data } = await http.post<unknown>("service/visits/create", {
+  const { data } = await http.post<unknown>("garage/visits/", {
     car: carId,
     description,
   })
