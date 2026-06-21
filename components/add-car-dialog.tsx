@@ -24,7 +24,6 @@ import {
 } from "@/components/ui/select"
 import { PLATE_LETTERS, type ApiCar, type ApiCarModel, type ApiUser } from "@/lib/types"
 import { toFa } from "@/lib/format"
-import { useGarage } from "@/components/garage-provider"
 import { LicensePlate } from "@/components/license-plate"
 import { fetchCars, fetchModels, createCar, updateCar, createModel, updateModel, createVisit, fetchUserByPhone, createUser, type CreateCarPayload, type UpdateCarPayload, type CreateUserPayload } from "@/lib/api"
 
@@ -54,8 +53,7 @@ const emptyModel = {
 type Step = "plate" | "owner" | "info"
 
 // ------------------- کامپوننت -------------------
-export function AddCarDialog() {
-  const { addCar } = useGarage()
+export function AddCarDialog({ onSuccess }: { onSuccess?: () => void } = {}) {
   const [open, setOpen] = useState(false)
   const [step, setStep] = useState<Step>("plate")
 
@@ -336,29 +334,8 @@ export function AddCarDialog() {
       let finalCarId: number
 
       if (selectedCar) {
-        // ماشین موجود — فقط visit می‌سازیم، هیچ چیز آپدیت نمی‌شه
+        // ماشین موجود — فقط visit می‌سازیم
         finalCarId = selectedCar.id
-
-        const ownerFullName = [
-          selectedCar.owner?.profile?.first_name,
-          selectedCar.owner?.profile?.last_name,
-        ].filter(Boolean).join(" ")
-        addCar({
-          plate: {
-            twoDigits: String(selectedCar.plate_first),
-            letter: selectedCar.plate_letter,
-            threeDigits: String(selectedCar.plate_second),
-            region: String(selectedCar.plate_region),
-          },
-          brand: selectedCar.model?.make ?? "",
-          model: selectedCar.model?.model ?? "",
-          color: "",
-          year: String(selectedCar.manufacturing_year ?? ""),
-          ownerName: ownerFullName,
-          ownerPhone: selectedCar.owner?.phone ?? "",
-          ownerEmail: selectedCar.owner?.profile?.email,
-          note: visitDescription,
-        })
       } else {
         // ماشین جدید
 
@@ -404,24 +381,6 @@ export function AddCarDialog() {
         }
         const createdCar = await createCar(carPayload)
         finalCarId = createdCar.id
-
-        const ownerFullName = [form.ownerFirstName, form.ownerLastName].filter(Boolean).join(" ")
-        addCar({
-          plate: {
-            twoDigits: form.twoDigits,
-            letter: form.letter,
-            threeDigits: form.threeDigits,
-            region: form.region,
-          },
-          brand: createdCar.model?.make ?? newModelForm.make,
-          model: createdCar.model?.model ?? newModelForm.model,
-          color: form.color,
-          year: form.year,
-          ownerName: ownerFullName,
-          ownerPhone: form.ownerPhone,
-          ownerEmail: form.ownerEmail || undefined,
-          note: visitDescription || form.note,
-        })
       }
 
       // POST ویزیت
@@ -429,6 +388,7 @@ export function AddCarDialog() {
 
       reset()
       setOpen(false)
+      onSuccess?.()
     } catch (e: unknown) {
       setSubmitError(e instanceof Error ? e.message : "خطایی رخ داد. دوباره تلاش کنید.")
     } finally {

@@ -1,15 +1,12 @@
 "use client"
 
 import { RequireAdmin } from "@/components/require-admin"
-import { GarageProvider } from "@/components/garage-provider"
-import { GarageDashboard } from "@/components/garage-dashboard"
+import { VisitsDashboard } from "@/components/visits-dashboard"
 
 export default function GaragePage() {
   return (
     <RequireAdmin>
-      <GarageProvider>
-        <GarageDashboard />
-      </GarageProvider>
+      <VisitsDashboard />
     </RequireAdmin>
   )
 }

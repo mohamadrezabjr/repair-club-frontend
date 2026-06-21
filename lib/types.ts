@@ -87,6 +87,38 @@ export interface ApiCar {
   plate_number: string
 }
 
+// ---- Visit / Garage API types ----
+
+export type VisitStatus = "queued" | "repairing" | "ready" | "delivered" | "cancelled"
+
+export interface ApiServiceOrder {
+  id: number
+  /** عنوان اصلی سرویس که باید در UI نمایش داده شود */
+  title: string
+  price: number
+  status: string
+}
+
+export interface ApiVisitCar {
+  id: number
+  model: {
+    make: string
+    model: string
+    model_year: number
+  }
+  plate_number: string
+}
+
+export interface ApiVisit {
+  id: number
+  car: ApiVisitCar
+  service_orders: ApiServiceOrder[]
+  status: VisitStatus
+  created_at: string
+}
+
+// ---- end Visit types ----
+
 export const PLATE_LETTERS = [
   "الف",
   "ب",

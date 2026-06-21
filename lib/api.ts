@@ -1,4 +1,4 @@
-import type { ApiCar, ApiCarModel, ApiUser } from "@/lib/types"
+import type { ApiCar, ApiCarModel, ApiUser, ApiVisit } from "@/lib/types"
 import { http } from "@/lib/http"
 
 export async function fetchCars(): Promise<ApiCar[]> {
@@ -87,4 +87,14 @@ export async function createVisit(carId: number, description: string): Promise<u
     description,
   })
   return data
+}
+
+/** دریافت تمام ویزیت‌ها از API */
+export async function fetchVisits(): Promise<ApiVisit[]> {
+  try {
+    const { data } = await http.get<ApiVisit[]>("garage/visits/")
+    return data
+  } catch {
+    return []
+  }
 }
