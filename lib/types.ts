@@ -1,123 +1,152 @@
-export type ServiceStatus = "pending" | "in-progress" | "done"
+// ─── Union types ──────────────────────────────────────────────────────────────
 
-export interface ServiceItem {
-  id: string
-  title: string
-  description?: string
-  status: ServiceStatus
-  price: number
+export type TransmissionType = "auto" | "man"
+export type ServiceOrderStatus = "pending" | "in-progress" | "done"
+export type VisitStatus = "ready" | "queued" | "repairing" | "delivered" | "cancelled"
+export type UserRole = "admin" | "user"
+export type PlateLetter =
+  | "الف"
+  | "ب"
+  | "پ"
+  | "ت"
+  | "ث"
+  | "ج"
+  | "د"
+  | "س"
+  | "ص"
+  | "ط"
+  | "ع"
+  | "ق"
+  | "ل"
+  | "م"
+  | "ن"
+  | "و"
+  | "ه"
+  | "ی"
+
+// ─── Core domain entities (official definitions) ───────────────────────────────
+
+export interface UserProfile {
+  id?: number
+  first_name: string | null
+  last_name: string | null
+  email: string | null
 }
 
-export interface PartItem {
+export interface User {
   id: string
+  phone: string
+  profile: UserProfile | null
+  role: UserRole
+}
+
+export interface CarModel {
+  id: number
+  make: string | null
+  model: string
+  model_year: number | null
+  transmission_type: TransmissionType | null
+}
+
+export interface Car {
+  id: number
+  owner: User | null
+  model: CarModel | null
+  manufacturing_year: number | null
+  registration_date: string
+  in_garage: boolean
+  last_visit_date: string | null
+  last_mileage: number | null
+  plate_first: number
+  plate_letter: PlateLetter
+  plate_second: number
+  plate_region: number
+  plate_number: string
+}
+
+export interface ProductType {
+  id: number
   name: string
-  quantity: number
-  unitPrice: number
+  description: string | null
 }
 
-// پلاک ایرانی: ۱۲ ل ۳۴۵ ایران ۶۷
+export interface Product {
+  id: number
+  name: string
+  description: string | null
+  price: number
+  product_type: ProductType | null
+  stock: number
+  created_at: string
+  updated_at: string
+}
+
+export interface ProductOrder {
+  id: number
+  product: Product | null
+  created_at: string
+  updated_at: string
+  quantity: number
+  total_price: number
+}
+
+export interface Service {
+  id: number
+  title: string
+  description: string | null
+  car_model: CarModel | null
+  base_price: number | null
+  products_needed: number[]
+  mileage_interval: number | null
+}
+
+export interface ServiceOrder {
+  id: number
+  title: string | null
+  service: Service | null
+  extra_description: string | null
+  price: number
+  status: ServiceOrderStatus
+  created_at: string
+  updated_at: string
+}
+
+export interface Visit {
+  id: number
+  car: Car | null
+  service_orders: ServiceOrder[]
+  product_orders: ProductOrder[]
+  status: VisitStatus
+  created_at: string
+  updated_at: string
+  description: string | null
+  is_ready?: boolean
+}
+
+// ─── Auth ───────────────────────────────────────────────────────────────────
+
+/** کاربر احراز هویت‌شده — منطبق با تعریف رسمی User */
+export type AuthUser = User
+
+// ─── Backward-compatible aliases (legacy `Api*` names) ─────────────────────────
+
+export type ApiCarOwnerProfile = UserProfile
+export type ApiCarOwner = User
+export type ApiUser = User
+export type ApiCarModel = CarModel
+export type ApiCar = Car
+export type ApiServiceOrder = ServiceOrder
+export type ApiProductOrder = ProductOrder
+export type ApiVisit = Visit
+
+// ─── پلاک ایرانی (برای کامپوننت LicensePlate) ──────────────────────────────────
+// نمایش: ۱۲ ل ۳۴۵ ایران ۶۷
 export interface Plate {
   twoDigits: string // دو رقم سمت چپ
   letter: string // حرف
   threeDigits: string // سه رقم
   region: string // کد شهر (دو رقم)
 }
-
-export interface Car {
-  id: string
-  plate: Plate
-  brand: string
-  model: string
-  color: string
-  year: string
-  ownerName: string
-  ownerPhone: string
-  ownerEmail?: string
-  entryAt: number // timestamp
-  note?: string
-  services: ServiceItem[]
-  parts: PartItem[]
-}
-
-// تایپ‌های Auth
-export interface AuthUser {
-  id: string
-  phone: string
-  profile: { first_name: string; last_name: string; email: string }
-  role: "admin" | "user"
-}
-
-// تایپ‌های API
-export interface ApiUser {
-  id: string
-  phone: string
-  profile: ApiCarOwnerProfile | null
-}
-
-export interface ApiCarOwnerProfile {
-  first_name: string
-  last_name: string
-  email: string
-}
-
-export interface ApiCarOwner {
-  id: string
-  phone: string
-  profile: ApiCarOwnerProfile | null
-}
-
-export interface ApiCarModel {
-  id: number
-  make: string
-  model: string
-  model_year: number
-  transmission_type: string
-}
-
-export interface ApiCar {
-  id: number
-  owner: ApiCarOwner | null
-  model: ApiCarModel | null
-  manufacturing_year: number
-  last_mileage: number
-  plate_first: number
-  plate_letter: string
-  plate_second: number
-  plate_region: number
-  plate_number: string
-}
-
-// ---- Visit / Garage API types ----
-
-export type VisitStatus = "queued" | "repairing" | "ready" | "delivered" | "cancelled"
-
-export interface ApiServiceOrder {
-  id: number
-  /** عنوان اصلی سرویس که باید در UI نمایش داده شود */
-  title: string
-  price: number
-  status: string
-}
-
-export interface ApiVisitCar {
-  id: number
-  model: {
-    make: string
-    model: string
-    model_year: number
-  }
-  plate_number: string
-}
-
-export interface ApiVisit {
-  id: number
-  car: ApiVisitCar
-  service_orders: ApiServiceOrder[]
-  status: VisitStatus
-  created_at: string
-}
-
-// ---- end Visit types ----
 
 export const PLATE_LETTERS = [
   "الف",

@@ -147,9 +147,9 @@ export function AddCarDialog({ onSuccess }: { onSuccess?: () => void } = {}) {
     ? allModels.slice(0, 8)
     : allModels.filter(
         (m) =>
-          m.make.includes(modelSearch) ||
+          (m.make ?? "").includes(modelSearch) ||
           m.model.includes(modelSearch) ||
-          String(m.model_year).includes(modelSearch),
+          String(m.model_year ?? "").includes(modelSearch),
       )
 
   // ------------------- انتخاب ماشین از dropdown -------------------
@@ -175,11 +175,13 @@ export function AddCarDialog({ onSuccess }: { onSuccess?: () => void } = {}) {
     // پر کردن فرم ادیت مدل با اطلاعات مدل فعلی ماشین
     setSelectedModel(car.model ?? null)
     if (car.model) {
-      setModelSearch(`${car.model.make} ${car.model.model} ${car.model.model_year}`)
+      setModelSearch(
+        `${car.model.make ?? ""} ${car.model.model} ${car.model.model_year ?? ""}`.trim(),
+      )
       setEditModelForm({
-        make: car.model.make,
+        make: car.model.make ?? "",
         model: car.model.model,
-        model_year: String(car.model.model_year),
+        model_year: car.model.model_year != null ? String(car.model.model_year) : "",
         transmission_type: (car.model.transmission_type as "man" | "auto") ?? "man",
       })
     } else {
@@ -193,7 +195,7 @@ export function AddCarDialog({ onSuccess }: { onSuccess?: () => void } = {}) {
     setSelectedModel(model)
     setIsNewModel(false)
     setModelDropOpen(false)
-    setModelSearch(`${model.make} ${model.model} ${model.model_year}`)
+    setModelSearch(`${model.make ?? ""} ${model.model} ${model.model_year ?? ""}`.trim())
   }, [])
 
   // ------------------- دوربین -------------------
@@ -299,7 +301,7 @@ export function AddCarDialog({ onSuccess }: { onSuccess?: () => void } = {}) {
         transmission_type: editModelForm.transmission_type,
       })
       setSelectedModel(updated)
-      setModelSearch(`${updated.make} ${updated.model} ${updated.model_year}`)
+      setModelSearch(`${updated.make ?? ""} ${updated.model} ${updated.model_year ?? ""}`.trim())
       setEditingModel(false)
     } catch (e: unknown) {
       setSubmitError(e instanceof Error ? e.message : "خطا در به‌روزرسانی مدل")

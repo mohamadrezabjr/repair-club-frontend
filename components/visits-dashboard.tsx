@@ -1,5 +1,6 @@
 "use client"
 
+import { useState } from "react"
 import useSWR from "swr"
 import Link from "next/link"
 import {
@@ -14,9 +15,10 @@ import {
 import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { AddCarDialog } from "@/components/add-car-dialog"
+import { VisitDetailSheet } from "@/components/visit-detail-sheet"
 import { fetchVisits } from "@/lib/api"
 import { toFa } from "@/lib/format"
-import type { ApiVisit, VisitStatus } from "@/lib/types"
+import type { ServiceOrder, Visit, VisitStatus } from "@/lib/types"
 
 // ---- مقادیر ثابت ----
 const ACTIVE_STATUSES: VisitStatus[] = ["queued", "repairing", "ready"]
@@ -42,11 +44,20 @@ const STATUS_STYLE: Record<VisitStatus, string> = {
 
 // ---- کامپوننت اصلی ----
 export function VisitsDashboard() {
-  const { data: visits = [], isLoading, mutate } = useSWR<ApiVisit[]>(
+  const { data: visits = [], isLoading, mutate } = useSWR<Visit[]>(
     "garage/visits",
     fetchVisits,
     { revalidateOnFocus: true },
   )
+
+  // مدیریت شیت جزئیات ویزیت
+  const [selectedVisit, setSelectedVisit] = useState<Visit | null>(null)
+  const [sheetOpen, setSheetOpen] = useState(false)
+
+  function openVisit(visit: Visit) {
+    setSelectedVisit(visit)
+    setSheetOpen(true)
+  }
 
   // بخش ۱: خودروهای فعال داخل گاراژ
   const activeVisits = visits.filter((v) =>
@@ -102,7 +113,7 @@ export function VisitsDashboard() {
           ) : (
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {activeVisits.map((visit) => (
-                <VisitCard key={visit.id} visit={visit} />
+                <VisitCard key={visit.id} visit={visit} onSelect={openVisit} />
               ))}
             </div>
           )}
@@ -131,29 +142,45 @@ export function VisitsDashboard() {
           ) : (
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {recentHistory.map((visit) => (
-                <VisitCard key={visit.id} visit={visit} />
+                <VisitCard key={visit.id} visit={visit} onSelect={openVisit} />
               ))}
             </div>
           )}
         </section>
       </main>
+
+      {/* شیت جزئیات ویزیت */}
+      <VisitDetailSheet
+        visit={selectedVisit}
+        open={sheetOpen}
+        onOpenChange={setSheetOpen}
+      />
     </div>
   )
 }
 
 // ---- کارت ویزیت ----
-function VisitCard({ visit }: { visit: ApiVisit }) {
+function VisitCard({
+  visit,
+  onSelect,
+}: {
+  visit: Visit
+  onSelect: (visit: Visit) => void
+}) {
   const { car, service_orders, status, created_at } = visit
-  const carLabel = car.model
-    ? `${car.model.make} ${car.model.model}`
+  const carLabel = car?.model
+    ? [car.model.make, car.model.model].filter(Boolean).join(" ") || "خودروی ناشناس"
     : "خودروی ناشناس"
 
   return (
-    <Card className="gap-0 overflow-hidden p-0">
+    <Card
+      className="gap-0 cursor-pointer overflow-hidden p-0 transition-shadow hover:shadow-md"
+      onClick={() => onSelect(visit)}
+    >
       {/* هدر کارت */}
       <div className="flex items-center justify-between gap-2 border-b border-border bg-muted/30 px-4 py-3">
         <span className="font-mono text-sm font-bold tracking-widest">
-          {car.plate_number}
+          {car?.plate_number ?? "—"}
         </span>
         <Badge className={STATUS_STYLE[status]}>{STATUS_LABEL[status]}</Badge>
       </div>
@@ -163,7 +190,7 @@ function VisitCard({ visit }: { visit: ApiVisit }) {
         {/* نام خودرو */}
         <div>
           <h3 className="font-bold leading-tight">{carLabel}</h3>
-          {car.model?.model_year && (
+          {car?.model?.model_year != null && (
             <p className="mt-0.5 text-sm text-muted-foreground">
               مدل {toFa(car.model.model_year)}
             </p>
@@ -173,10 +200,12 @@ function VisitCard({ visit }: { visit: ApiVisit }) {
         {/* سرویس‌ها */}
         {service_orders.length > 0 && (
           <div className="space-y-1.5">
-            {service_orders.map((so) => (
+            {service_orders.map((so: ServiceOrder) => (
               <div key={so.id} className="flex items-center gap-1.5 text-sm text-muted-foreground">
                 <Wrench className="size-3.5 shrink-0 text-primary" />
-                <span className="truncate">{so.title}</span>
+                <span className="truncate">
+                  {so.title ?? so.service?.title ?? "سرویس بدون عنوان"}
+                </span>
               </div>
             ))}
           </div>
