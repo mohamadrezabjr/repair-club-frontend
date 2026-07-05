@@ -626,7 +626,7 @@ export function AddCarDialog({ onSuccess }: { onSuccess?: () => void } = {}) {
               {/* دوربین */}
               <div className="rounded-xl border border-border bg-muted/30 p-4">
                 <div className="mb-3 flex items-center justify-between">
-                  <span className="text-sm font-semibold text-muted-foreground">ثبت لاک با دوربین</span>
+                  <span className="text-sm font-semibold text-muted-foreground">ثبت پلاک با دوربین</span>
                   {camActive ? (
                     <Button variant="ghost" size="sm" onClick={stopCamera} className="gap-1.5 text-destructive">
                       <CameraOff className="size-4" /> خاموش کردن
