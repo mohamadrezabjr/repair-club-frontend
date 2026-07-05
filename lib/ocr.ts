@@ -2,8 +2,9 @@ import type { Plate } from "./types"
 import { PLATE_LETTERS } from "./types"
 
 /**
- * پیش‌پردازش تصویر برای بهبود کیفیت OCR
- * خاکستری‌سازی، افزایش کنتراست، و آستانه‌گذاری
+ * پیش‌پردازش ملایم تصویر برای OCR
+ * خاکستری‌سازی + افزایش کنتراست (بدون آستانه‌گذاری تند)
+ * هدف: حفظ جزئیات حروف فارسی (نقطه‌ها و منحنی‌ها)
  */
 function preprocessImage(
   ctx: CanvasRenderingContext2D,
@@ -13,48 +14,45 @@ function preprocessImage(
   const imageData = ctx.getImageData(0, 0, width, height)
   const data = imageData.data
 
-  // 1) خاکستری‌سازی + افزایش کنتراست
+  // 1) خاکستری‌سازی
   const gray = new Uint8ClampedArray(width * height)
   for (let i = 0; i < data.length; i += 4) {
-    // فرمول وزنی استاندارد
-    const g = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2]
-    gray[i / 4] = g
+    gray[i / 4] = Math.round(0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2])
   }
 
-  // 2) آستانه‌گذاری ساده (Otsu-like)
-  // محاسبه هیستوگرام
-  const hist = new Array(256).fill(0) as number[]
-  for (let i = 0; i < gray.length; i++) hist[gray[i]]++
-  const total = gray.length
-  let sum = 0
-  for (let i = 0; i < 256; i++) sum += i * hist[i]
-  let sumB = 0
-  let wB = 0
-  let maxVariance = 0
-  let threshold = 0
-  for (let i = 0; i < 256; i++) {
-    wB += hist[i]
-    if (wB === 0) continue
-    const wF = total - wB
-    if (wF === 0) break
-    sumB += i * hist[i]
-    const mB = sumB / wB
-    const mF = (sum - sumB) / wF
-    const variance = wB * wF * (mB - mF) * (mB - mF)
-    if (variance > maxVariance) {
-      maxVariance = variance
-      threshold = i
+  // 2) افزایش کنتراست (کشیدن هیستوگرام) — بدون آستانه‌گذاری تند
+  let min = 255
+  let max = 0
+  for (let i = 0; i < gray.length; i++) {
+    if (gray[i] < min) min = gray[i]
+    if (gray[i] > max) max = gray[i]
+  }
+  const range = max - min || 1
+  for (let i = 0; i < gray.length; i++) {
+    gray[i] = Math.round(((gray[i] - min) / range) * 255)
+  }
+
+  // 3) تیز کردن ملایم (Unsharp Mask) — بهبود لبه‌های حروف
+  const sharpened = new Uint8ClampedArray(gray.length)
+  for (let y = 1; y < height - 1; y++) {
+    for (let x = 1; x < width - 1; x++) {
+      const idx = y * width + x
+      const center = gray[idx] * 5
+      const neighbors =
+        gray[(y - 1) * width + x] +
+        gray[(y + 1) * width + x] +
+        gray[y * width + x - 1] +
+        gray[y * width + x + 1]
+      sharpened[idx] = Math.min(255, Math.max(0, center - neighbors))
     }
   }
 
-  // 3) اعمال آستانه‌گذاری — پلاک زرد روشن‌تر از متن تیره
-  // برای پلاک ایران (پس‌زمینه زرد، متن سیاه)، تاریک‌ها رو سیاه و روشن‌ها رو سفید می‌کنیم
-  for (let i = 0; i < gray.length; i++) {
-    const v = gray[i] > threshold ? 255 : 0
+  // 4) نوشتن نتیجه
+  for (let i = 0; i < sharpened.length; i++) {
     const idx = i * 4
-    data[idx] = v
-    data[idx + 1] = v
-    data[idx + 2] = v
+    data[idx] = sharpened[i]
+    data[idx + 1] = sharpened[i]
+    data[idx + 2] = sharpened[i]
     data[idx + 3] = 255
   }
 
@@ -163,9 +161,70 @@ function extractDigits(text: string): string {
 }
 
 /**
+ * نتیجه پارس کردن پلاک — شامل وضعیت موفقیت
+ */
+export interface PlateParseResult {
+  plate: Plate
+  success: boolean
+  message: string
+}
+
+/**
+ * نتیجه OCR — شامل وضعیت و اطلاعات خطا
+ */
+export interface OcrResult {
+  plate: Plate
+  success: boolean
+  message: string
+}
+
+/**
+ * اعتبارسنجی نتیجه پارس شده پلاک
+ */
+function validatePlate(result: { twoDigits: string; letter: string; threeDigits: string; region: string }): string | null {
+  // بررسی وجود همه فیلدها
+  if (!result.twoDigits || !result.letter || !result.threeDigits) {
+    return "نتوانستیم اطلاعات کامل پلاک را تشخیص دهیم"
+  }
+
+  // بررسی اعداد — باید فقط شامل ارقام باشن
+  if (!/^\d{2}$/.test(result.twoDigits)) {
+    return "خطا در تشخیص اعداد اول پلاک"
+  }
+
+  if (!/^\d{3}$/.test(result.threeDigits)) {
+    return "خطا در تشخیص اعداد دوم پلاک"
+  }
+
+  // بررسی حرف — باید یکی از حروف مجاز پلاک باشه
+  if (!PLATE_LETTERS.includes(result.letter)) {
+    return "خطا در تشخیص حرف پلاک"
+  }
+
+  // بررسی محدوده اعداد دو رقمی (معمولاً 10-99)
+  const twoNum = parseInt(result.twoDigits)
+  if (twoNum < 10 || twoNum > 99) {
+    return "اعداد اول پلاک نامعتبر است"
+  }
+
+  // بررسی محدوده اعداد سه رقمی (معمولاً 100-999)
+  const threeNum = parseInt(result.threeDigits)
+  if (threeNum < 100 || threeNum > 999) {
+    return "اعداد دوم پلاک نامعتبر است"
+  }
+
+  // بررسی کد شهر (اختیاری ولی اگه هست باید عدد باشه)
+  if (result.region && !/^\d{2}$/.test(result.region)) {
+    return "خطا در تشخیص کد شهر"
+  }
+
+  return null // بدون خطا
+}
+
+/**
  * پارس کردن متن OCR و استخراج اطلاعات پلاک
  */
-function parsePlateText(rawText: string): Plate {
+function parsePlateText(rawText: string): PlateParseResult {
   const text = rawText
     .replace(/[^\w\u0600-\u06FF\uFB50-\uFDFF\uFE70-\uFEFF\s]/g, " ")
     .trim()
@@ -178,7 +237,7 @@ function parsePlateText(rawText: string): Plate {
 
   let twoDigits = ""
   let threeDigits = ""
-  let letter = "ب"
+  let letter = ""
   let region = ""
 
   // تلاش ۱: پیدا کردن خطی که الگوی "عدد حرف عدد" داره
@@ -201,12 +260,20 @@ function parsePlateText(rawText: string): Plate {
       if (beforeLetter.length === 2 && afterLetter.length >= 3) {
         twoDigits = beforeLetter
         threeDigits = afterLetter.slice(0, 3)
+        // اگه اضافه اومد، ممکنه کد شهر باشه
+        if (afterLetter.length >= 5) {
+          region = afterLetter.slice(3, 5)
+        }
       } else if (digits.length === 5) {
         twoDigits = digits.slice(0, 2)
         threeDigits = digits.slice(2, 5)
       } else if (digits.length >= 5) {
         twoDigits = digits.slice(0, 2)
         threeDigits = digits.slice(2, 5)
+        // باقی‌مانده ممکنه کد شهر باشه
+        if (digits.length >= 7) {
+          region = digits.slice(5, 7)
+        }
       }
       break
     }
@@ -272,12 +339,22 @@ function parsePlateText(rawText: string): Plate {
 
   console.log("[OCR] Parsed:", { twoDigits, letter, threeDigits, region })
 
-  return {
-    twoDigits: twoDigits || "",
-    letter: letter || "ب",
-    threeDigits: threeDigits || "",
-    region: region || "",
+  const plate: Plate = {
+    twoDigits,
+    letter,
+    threeDigits,
+    region,
   }
+
+  // اعتبارسنجی نتیجه
+  const error = validatePlate(plate)
+  if (error) {
+    console.log("[OCR] Validation failed:", error)
+    return { plate, success: false, message: error }
+  }
+
+  console.log("[OCR] Validation passed")
+  return { plate, success: true, message: "" }
 }
 
 /**
@@ -285,7 +362,7 @@ function parsePlateText(rawText: string): Plate {
  */
 export async function ocrLicensePlate(
   video: HTMLVideoElement,
-): Promise<Plate> {
+): Promise<PlateParseResult> {
   const { createWorker } = await import("tesseract.js")
 
   const canvas = document.createElement("canvas")
@@ -326,9 +403,7 @@ export async function ocrLicensePlate(
 
   // تنظیمات برای پلاک
   await worker.setParameters({
-    tessedit_pageseg_mode: "7", // تک خطی (برای خواندن خط اصلی پلاک)
-    tessedit_char_whitelist:
-      "۰۱۲۳۴۵۶۷۸۹0123456789الفبتثججزسسشصطعضقلقلمنهویBPTJDZSGNVMHL",
+    tessedit_pageseg_mode: "6", // فرض یک بلوک متن یکپارچه (بهتر برای متن RTL)
   })
 
   // OCR روی تصویر کامل
@@ -379,4 +454,3 @@ export function captureFrame(video: HTMLVideoElement): string {
   ctx.drawImage(video, 0, 0)
   return canvas.toDataURL("image/jpeg", 0.85)
 }
-
