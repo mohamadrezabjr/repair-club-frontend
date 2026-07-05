@@ -1,29 +1,35 @@
-"use client"
+"use client";
 
-import { useState } from "react"
-import useSWR from "swr"
-import Link from "next/link"
+import { useState } from "react";
+import useSWR from "swr";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   ArrowLeft,
   Car as CarIcon,
   Clock,
   History,
   Loader2,
+  LogIn,
+  LogOut,
+  UserCircle,
   Warehouse,
   Wrench,
-} from "lucide-react"
-import { Card } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import { AddCarDialog } from "@/components/add-car-dialog"
-import { VisitDetailSheet } from "@/components/visit-detail-sheet"
-import { fetchVisits } from "@/lib/api"
-import { toFa } from "@/lib/format"
-import type { ServiceOrder, Visit, VisitStatus } from "@/lib/types"
+} from "lucide-react";
+import { Card } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { AddCarDialog } from "@/components/add-car-dialog";
+import { VisitDetailSheet } from "@/components/visit-detail-sheet";
+import { useAuth } from "@/components/auth-provider";
+import { fetchVisits } from "@/lib/api";
+import { toFa } from "@/lib/format";
+import type { ServiceOrder, Visit, VisitStatus } from "@/lib/types";
 
 // ---- مقادیر ثابت ----
-const ACTIVE_STATUSES: VisitStatus[] = ["queued", "repairing", "ready"]
-const HISTORY_STATUSES: VisitStatus[] = ["delivered", "cancelled"]
-const RECENT_HISTORY_LIMIT = 5
+const ACTIVE_STATUSES: VisitStatus[] = ["queued", "repairing", "ready"];
+const HISTORY_STATUSES: VisitStatus[] = ["delivered", "cancelled"];
+const RECENT_HISTORY_LIMIT = 5;
 
 // ---- برچسب وضعیت ----
 const STATUS_LABEL: Record<VisitStatus, string> = {
@@ -32,7 +38,7 @@ const STATUS_LABEL: Record<VisitStatus, string> = {
   ready: "آماده تحویل",
   delivered: "تحویل داده شده",
   cancelled: "لغو شده",
-}
+};
 
 const STATUS_STYLE: Record<VisitStatus, string> = {
   queued: "border-muted bg-muted/40 text-muted-foreground",
@@ -40,29 +46,36 @@ const STATUS_STYLE: Record<VisitStatus, string> = {
   ready: "border-chart-3/40 bg-chart-3/20 text-chart-3",
   delivered: "border-chart-2/40 bg-chart-2/20 text-chart-2",
   cancelled: "border-destructive/40 bg-destructive/20 text-destructive",
-}
+};
 
 // ---- کامپوننت اصلی ----
 export function VisitsDashboard() {
-  const { data: visits = [], isLoading, mutate } = useSWR<Visit[]>(
-    "garage/visits",
-    fetchVisits,
-    { revalidateOnFocus: true },
-  )
+  const {
+    data: visits = [],
+    isLoading,
+    mutate,
+  } = useSWR<Visit[]>("garage/visits", fetchVisits, {
+    revalidateOnFocus: true,
+  });
+  const { user, isLoading: authLoading, logout } = useAuth();
+  const router = useRouter();
+
+  function handleLogout() {
+    logout();
+    router.push("/login");
+  }
 
   // مدیریت شیت جزئیات ویزیت
-  const [selectedVisit, setSelectedVisit] = useState<Visit | null>(null)
-  const [sheetOpen, setSheetOpen] = useState(false)
+  const [selectedVisit, setSelectedVisit] = useState<Visit | null>(null);
+  const [sheetOpen, setSheetOpen] = useState(false);
 
   function openVisit(visit: Visit) {
-    setSelectedVisit(visit)
-    setSheetOpen(true)
+    setSelectedVisit(visit);
+    setSheetOpen(true);
   }
 
   // بخش ۱: خودروهای فعال داخل گاراژ
-  const activeVisits = visits.filter((v) =>
-    ACTIVE_STATUSES.includes(v.status),
-  )
+  const activeVisits = visits.filter((v) => ACTIVE_STATUSES.includes(v.status));
 
   // بخش ۲: تاریخچه اخیر — فقط ۵ مورد آخر
   const recentHistory = visits
@@ -71,7 +84,7 @@ export function VisitsDashboard() {
       (a, b) =>
         new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
     )
-    .slice(0, RECENT_HISTORY_LIMIT)
+    .slice(0, RECENT_HISTORY_LIMIT);
 
   return (
     <div className="min-h-screen bg-background">
@@ -91,7 +104,46 @@ export function VisitsDashboard() {
               </p>
             </div>
           </div>
-          <AddCarDialog onSuccess={() => mutate()} />
+          <div className="flex items-center gap-2">
+            {authLoading ? (
+              <Loader2 className="size-5 animate-spin text-muted-foreground" />
+            ) : user ? (
+              /* کاربر لاگین کرده — نمایش پروفایل و دکمه خروج */
+              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2 rounded-xl border border-border bg-muted/40 px-3 py-1.5">
+                  <UserCircle className="size-5 text-primary shrink-0" />
+                  <span className="text-sm font-medium leading-none">
+                    {user.profile?.first_name && user.profile?.last_name
+                      ? `${user.profile.first_name} ${user.profile.last_name}`
+                      : (user.profile?.first_name ?? user.phone)}
+                  </span>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleLogout}
+                  className="gap-1.5 text-muted-foreground hover:text-destructive"
+                >
+                  <LogOut className="size-4" />
+                  خروج
+                </Button>
+              </div>
+            ) : (
+              /* کاربر لاگین نکرده — دکمه‌های ورود و ثبت‌نام */
+              <div className="flex items-center gap-2">
+                <Button variant="ghost" size="sm" asChild>
+                  <Link href="/register">ثبت‌نام</Link>
+                </Button>
+                <Button size="sm" asChild className="gap-1.5">
+                  <Link href="/login">
+                    <LogIn className="size-4" />
+                    ورود
+                  </Link>
+                </Button>
+              </div>
+            )}
+            <AddCarDialog onSuccess={() => mutate()} />
+          </div>
         </div>
       </header>
 
@@ -154,9 +206,10 @@ export function VisitsDashboard() {
         visit={selectedVisit}
         open={sheetOpen}
         onOpenChange={setSheetOpen}
+        onUpdate={() => mutate()}
       />
     </div>
-  )
+  );
 }
 
 // ---- کارت ویزیت ----
@@ -164,13 +217,14 @@ function VisitCard({
   visit,
   onSelect,
 }: {
-  visit: Visit
-  onSelect: (visit: Visit) => void
+  visit: Visit;
+  onSelect: (visit: Visit) => void;
 }) {
-  const { car, service_orders, status, created_at } = visit
+  const { car, service_orders, status, created_at } = visit;
   const carLabel = car?.model
-    ? [car.model.make, car.model.model].filter(Boolean).join(" ") || "خودروی ناشناس"
-    : "خودروی ناشناس"
+    ? [car.model.make, car.model.model].filter(Boolean).join(" ") ||
+      "خودروی ناشناس"
+    : "خودروی ناشناس";
 
   return (
     <Card
@@ -201,7 +255,10 @@ function VisitCard({
         {service_orders.length > 0 && (
           <div className="space-y-1.5">
             {service_orders.map((so: ServiceOrder) => (
-              <div key={so.id} className="flex items-center gap-1.5 text-sm text-muted-foreground">
+              <div
+                key={so.id}
+                className="flex items-center gap-1.5 text-sm text-muted-foreground"
+              >
                 <Wrench className="size-3.5 shrink-0 text-primary" />
                 <span className="truncate">
                   {so.title ?? so.service?.title ?? "سرویس بدون عنوان"}
@@ -218,7 +275,7 @@ function VisitCard({
         </div>
       </div>
     </Card>
-  )
+  );
 }
 
 // ---- وضعیت خالی ----
@@ -228,7 +285,7 @@ function EmptyState({ message }: { message: string }) {
       <Warehouse className="size-10 text-muted-foreground/40" />
       <p className="text-sm text-muted-foreground">{message}</p>
     </div>
-  )
+  );
 }
 
 // ---- اسکلتون لودینگ ----
@@ -237,7 +294,7 @@ function LoadingGrid() {
     <div className="flex items-center justify-center py-16">
       <Loader2 className="size-8 animate-spin text-muted-foreground" />
     </div>
-  )
+  );
 }
 
 // ---- فرمت تاریخ ساده از ISO ----
@@ -247,8 +304,8 @@ function formatJalaliDate(iso: string): string {
       year: "numeric",
       month: "long",
       day: "numeric",
-    }).format(new Date(iso))
+    }).format(new Date(iso));
   } catch {
-    return iso
+    return iso;
   }
 }

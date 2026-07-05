@@ -1,4 +1,4 @@
-import type { ApiCar, ApiCarModel, ApiUser, ApiVisit } from "@/lib/types"
+import type { ApiCar, ApiCarModel, ApiUser, ApiVisit, Service, ServiceOrder, ServiceOrderStatus } from "@/lib/types"
 import { http } from "@/lib/http"
 
 export async function fetchCars(): Promise<ApiCar[]> {
@@ -97,4 +97,81 @@ export async function fetchVisits(): Promise<ApiVisit[]> {
   } catch {
     return []
   }
+}
+
+/** دریافت لیست سرویس‌های پایه */
+export async function fetchServices(): Promise<Service[]> {
+  try {
+    const { data } = await http.get<Service[]>("garage/services/")
+    return data
+  } catch {
+    return []
+  }
+}
+
+// ─── Service Orders ──────────────────────────────────────────────────────────
+
+/** پیلود سرویس داخل یک service_order */
+export type ServicePayload =
+  | { id: number }                                              // سرویس موجود
+  | {                                                           // سرویس جدید
+      id: null
+      title: string
+      description?: string | null
+      base_price?: number | null
+      mileage_interval?: number | null
+      car_model?: number | null
+      products_needed?: number[]
+    }
+
+export interface ServiceOrderPayload {
+  id: number | null
+  service: ServicePayload
+  title?: string | null
+  extra_description?: string | null
+  price: number
+  status: ServiceOrderStatus
+}
+
+/**
+ * افزودن/ویرایش سرویس‌های یک ویزیت
+ * POST garage/visits/<visit_id>/service_orders/
+ * پاسخ: ویزیت به‌روزشده
+ */
+export async function saveServiceOrders(
+  visitId: number,
+  serviceOrders: ServiceOrderPayload[],
+): Promise<ApiVisit> {
+  const { data } = await http.post<ApiVisit>(
+    `garage/visits/${visitId}/service_orders/`,
+    { service_orders: serviceOrders },
+  )
+  return data
+}
+
+/**
+ * تغییر وضعیت یک سرویس‌اوردر
+ * PATCH garage/visits/<visit_id>/service_orders/<order_id>/
+ */
+export async function updateServiceOrderStatus(
+  visitId: number,
+  orderId: number,
+  status: ServiceOrderStatus,
+): Promise<ServiceOrder> {
+  const { data } = await http.patch<ServiceOrder>(
+    `garage/visits/${visitId}/service_orders/${orderId}/`,
+    { status },
+  )
+  return data
+}
+
+/**
+ * حذف یک سرویس‌اوردر
+ * DELETE garage/visits/<visit_id>/service_orders/<order_id>/
+ */
+export async function deleteServiceOrder(
+  visitId: number,
+  orderId: number,
+): Promise<void> {
+  await http.delete(`garage/visits/${visitId}/service_orders/${orderId}/`)
 }

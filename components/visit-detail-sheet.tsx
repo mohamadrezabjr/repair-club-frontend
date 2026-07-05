@@ -1,5 +1,6 @@
 "use client"
 
+import { useEffect, useState } from "react"
 import {
   CircleDot,
   Clock,
@@ -19,6 +20,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet"
 import { Badge } from "@/components/ui/badge"
+import { ServiceOrdersTab } from "@/components/service-orders-tab"
 import type {
   ProductOrder,
   ServiceOrder,
@@ -91,14 +93,27 @@ export function VisitDetailSheet({
   visit,
   open,
   onOpenChange,
+  onUpdate,
 }: {
   visit: Visit | null
   open: boolean
   onOpenChange: (open: boolean) => void
+  /** فراخوانی شود تا صفحه پدر داده‌ها را refetch کند */
+  onUpdate?: () => void
 }) {
+  // نگه‌داری لوکال سرویس‌اوردرها برای آپدیت فوری UI
+  const [localOrders, setLocalOrders] = useState<ServiceOrder[]>(
+    visit?.service_orders ?? [],
+  )
+
+  // وقتی ویزیت از پدر عوض شد، localOrders رو sync کن
+  useEffect(() => {
+    setLocalOrders(visit?.service_orders ?? [])
+  }, [visit])
+
   if (!visit) return null
 
-  const { car, service_orders, product_orders, status, created_at, description } = visit
+  const { car, product_orders, status, created_at, description } = visit
 
   const carLabel = carLabelOf(visit)
 
@@ -108,8 +123,13 @@ export function VisitDetailSheet({
         .join(" ")
     : null
 
-  const servicesTotal = service_orders.reduce((sum, s) => sum + s.price, 0)
+  const servicesTotal = localOrders.reduce((sum, s) => sum + s.price, 0)
   const productsTotal = product_orders.reduce((sum, p) => sum + p.total_price, 0)
+
+  function handleOrdersUpdate(updatedOrders: ServiceOrder[]) {
+    setLocalOrders(updatedOrders)
+    onUpdate?.()
+  }
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -170,51 +190,22 @@ export function VisitDetailSheet({
         <Tabs defaultValue="services" className="flex-1 p-6">
           <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="services" className="gap-1.5">
-              <Wrench className="size-4" />
-              سرویس‌ها ({toFa(service_orders.length)})
-            </TabsTrigger>
+                <Wrench className="size-4" />
+                سرویس‌ها ({toFa(localOrders.length)})
+              </TabsTrigger>
             <TabsTrigger value="products" className="gap-1.5">
               <Package className="size-4" />
               قطعات و کالا ({toFa(product_orders.length)})
             </TabsTrigger>
           </TabsList>
 
-          {/* سفارش‌های سرویس */}
+          {/* سفارش‌های سرویس — قابل ویرایش */}
           <TabsContent value="services" className="mt-4">
-            {service_orders.length === 0 ? (
-              <EmptyState text="هنوز سرویسی ثبت نشده است." icon="wrench" />
-            ) : (
-              <ul className="space-y-2">
-                {service_orders.map((so) => (
-                  <li
-                    key={so.id}
-                    className="flex items-center gap-3 rounded-lg border border-border bg-card p-3"
-                  >
-                    <CircleDot
-                      className={cn(
-                        "size-4 shrink-0",
-                        SERVICE_ORDER_STATUS_ICON_CLASS[so.status] ??
-                          "text-muted-foreground",
-                      )}
-                    />
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate font-medium">{serviceOrderTitle(so)}</p>
-                      {so.extra_description && (
-                        <p className="truncate text-xs text-muted-foreground">
-                          {so.extra_description}
-                        </p>
-                      )}
-                      <p className="text-sm text-muted-foreground">
-                        {formatToman(so.price)}
-                      </p>
-                    </div>
-                    <span className="shrink-0 rounded-full border px-2 py-0.5 text-xs">
-                      {SERVICE_ORDER_STATUS_LABEL[so.status] ?? so.status}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            )}
+            <ServiceOrdersTab
+              visitId={visit.id}
+              serviceOrders={localOrders}
+              onUpdate={handleOrdersUpdate}
+            />
           </TabsContent>
 
           {/* سفارش‌های قطعه */}
