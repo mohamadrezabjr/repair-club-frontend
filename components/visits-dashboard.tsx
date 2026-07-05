@@ -90,29 +90,29 @@ export function VisitsDashboard() {
     <div className="min-h-screen bg-background">
       {/* هدر */}
       <header className="sticky top-0 z-10 border-b border-border bg-background/90 backdrop-blur">
-        <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-4 sm:px-6">
-          <div className="flex items-center gap-3">
-            <div className="flex size-11 items-center justify-center rounded-xl bg-primary text-primary-foreground">
-              <Warehouse className="size-6" />
+        <div className="mx-auto flex max-w-7xl items-center justify-between gap-2 px-3 py-3 sm:gap-4 sm:px-6 sm:py-4">
+          <div className="flex items-center gap-2 sm:gap-3">
+            <div className="flex size-9 items-center justify-center rounded-xl bg-primary text-primary-foreground sm:size-11">
+              <Warehouse className="size-5 sm:size-6" />
             </div>
             <div>
-              <h1 className="text-lg font-bold leading-tight sm:text-xl">
+              <h1 className="text-base font-bold leading-tight sm:text-xl">
                 سامانه مدیریت تعمیرگاه
               </h1>
-              <p className="text-sm text-muted-foreground">
+              <p className="hidden text-sm text-muted-foreground sm:block">
                 مدیریت خودروهای داخل گاراژ
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex shrink-0 items-center gap-1 sm:gap-2">
             {authLoading ? (
               <Loader2 className="size-5 animate-spin text-muted-foreground" />
             ) : user ? (
               /* کاربر لاگین کرده — نمایش پروفایل و دکمه خروج */
-              <div className="flex items-center gap-3">
-                <div className="flex items-center gap-2 rounded-xl border border-border bg-muted/40 px-3 py-1.5">
-                  <UserCircle className="size-5 text-primary shrink-0" />
-                  <span className="text-sm font-medium leading-none">
+              <div className="flex items-center gap-2 sm:gap-3">
+                <div className="flex items-center gap-1.5 rounded-xl border border-border bg-muted/40 px-2 py-1.5 sm:gap-2 sm:px-3">
+                  <UserCircle className="size-5 shrink-0 text-primary" />
+                  <span className="hidden text-sm font-medium leading-none sm:inline">
                     {user.profile?.first_name && user.profile?.last_name
                       ? `${user.profile.first_name} ${user.profile.last_name}`
                       : (user.profile?.first_name ?? user.phone)}
@@ -125,19 +125,22 @@ export function VisitsDashboard() {
                   className="gap-1.5 text-muted-foreground hover:text-destructive"
                 >
                   <LogOut className="size-4" />
-                  خروج
+                  <span className="hidden sm:inline">خروج</span>
                 </Button>
               </div>
             ) : (
               /* کاربر لاگین نکرده — دکمه‌های ورود و ثبت‌نام */
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1 sm:gap-2">
                 <Button variant="ghost" size="sm" asChild>
-                  <Link href="/register">ثبت‌نام</Link>
+                  <Link href="/register">
+                    <span className="hidden sm:inline">ثبت‌نام</span>
+                    <span className="sm:hidden">عضویت</span>
+                  </Link>
                 </Button>
                 <Button size="sm" asChild className="gap-1.5">
                   <Link href="/login">
                     <LogIn className="size-4" />
-                    ورود
+                    <span className="hidden sm:inline">ورود</span>
                   </Link>
                 </Button>
               </div>
