@@ -7,6 +7,7 @@ import { Card } from "@/components/ui/card"
 import type { Car } from "@/lib/types"
 import { toEn, toFa } from "@/lib/format"
 import { useGarage } from "@/components/garage-provider"
+import { ThemeToggle } from "@/components/theme-toggle"
 import { AddCarDialog } from "@/components/add-car-dialog"
 import { CarCard } from "@/components/car-card"
 import { CarDetailSheet } from "@/components/car-detail-sheet"
@@ -55,7 +56,7 @@ export function GarageDashboard() {
               <p className="text-sm text-muted-foreground">مدیریت خودروهای داخل گاراژ</p>
             </div>
           </div>
-          <AddCarDialog />
+          <ThemeToggle />
         </div>
       </header>
 

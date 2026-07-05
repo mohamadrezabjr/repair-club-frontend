@@ -20,6 +20,7 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { AddCarDialog } from "@/components/add-car-dialog";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { VisitDetailSheet } from "@/components/visit-detail-sheet";
 import { useAuth } from "@/components/auth-provider";
 import { fetchVisits } from "@/lib/api";
@@ -146,6 +147,7 @@ export function VisitsDashboard() {
               </div>
             )}
             <AddCarDialog onSuccess={() => mutate()} />
+            <ThemeToggle />
           </div>
         </div>
       </header>
