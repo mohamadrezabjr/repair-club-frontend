@@ -21,11 +21,14 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { AddCarDialog } from "@/components/add-car-dialog";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { CarDetailSheet } from "@/components/car-detail-sheet";
+import { LicensePlate } from "@/components/license-plate";
 import { VisitDetailSheet } from "@/components/visit-detail-sheet";
 import { useAuth } from "@/components/auth-provider";
 import { fetchVisits } from "@/lib/api";
 import { toFa } from "@/lib/format";
 import type { ServiceOrder, Visit, VisitStatus } from "@/lib/types";
+import { carToPlate } from "@/lib/types";
 
 // ---- مقادیر ثابت ----
 const ACTIVE_STATUSES: VisitStatus[] = ["queued", "repairing", "ready"];
@@ -238,9 +241,16 @@ function VisitCard({
     >
       {/* هدر کارت */}
       <div className="flex items-center justify-between gap-2 border-b border-border bg-muted/30 px-4 py-3">
-        <span className="font-mono text-sm font-bold tracking-widest">
-          {car?.plate_number ?? "—"}
-        </span>
+        {(() => {
+          const plate = carToPlate(car);
+          return plate ? (
+            <LicensePlate plate={plate} />
+          ) : (
+            <span className="font-mono text-sm font-bold tracking-widest">
+              {car?.plate_number ?? "—"}
+            </span>
+          );
+        })()}
         <Badge className={STATUS_STYLE[status]}>{STATUS_LABEL[status]}</Badge>
       </div>
 

@@ -28,8 +28,11 @@ import type {
   Visit,
   VisitStatus,
 } from "@/lib/types"
+import { carToPlate } from "@/lib/types"
 import { formatToman, toFa } from "@/lib/format"
 import { cn } from "@/lib/utils"
+import { LicensePlate } from "@/components/license-plate"
+import { CarDetailSheet } from "@/components/car-detail-sheet"
 
 // ---- برچسب و استایل وضعیت ویزیت ----
 const VISIT_STATUS_LABEL: Record<VisitStatus, string> = {
@@ -154,7 +157,16 @@ export function VisitDetailSheet({
 
           {/* اطلاعات پایه */}
           <div className="grid grid-cols-2 gap-x-4 gap-y-2 rounded-lg bg-muted/40 p-3 text-sm sm:grid-cols-3">
-            <InfoRow label="شماره پلاک" value={car?.plate_number || "—"} />
+            {(() => {
+              const plate = carToPlate(car)
+              return plate ? (
+                <div className="col-span-2 sm:col-span-3">
+                  <LicensePlate plate={plate} />
+                </div>
+              ) : (
+                <InfoRow label="شماره پلاک" value={car?.plate_number || "—"} />
+              )
+            })()}
             {car?.model?.model_year != null && (
               <InfoRow label="مدل سال" value={toFa(car.model.model_year)} />
             )}

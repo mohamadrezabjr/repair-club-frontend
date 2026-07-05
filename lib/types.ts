@@ -172,3 +172,14 @@ export const PLATE_LETTERS = [
   "ی",
   "معلولین",
 ]
+
+// تبدیل فیلدهای پلاک خودرو به شیء Plate برای کامپوننت LicensePlate
+export function carToPlate(car: Car | null | undefined): Plate | null {
+  if (!car) return null
+  return {
+    twoDigits: String(car.plate_first ?? ""),
+    letter: car.plate_letter ?? "ب",
+    threeDigits: String(car.plate_second ?? ""),
+    region: String(car.plate_region ?? ""),
+  }
+}
