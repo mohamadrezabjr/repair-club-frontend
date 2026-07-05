@@ -96,7 +96,7 @@ export function GarageDashboard() {
               </p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="flex flex-1 flex-col overflow-y-auto overflow-x-hidden px-4 pb-4 pt-2 sm:px-6">
               {filtered.map((car) => (
                 <CarCard key={car.id} car={car} onOpen={openCar} />
               ))}
