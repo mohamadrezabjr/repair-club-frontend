@@ -26,6 +26,9 @@ import { PLATE_LETTERS, type ApiCar, type ApiCarModel, type ApiUser } from "@/li
 import { toFa } from "@/lib/format"
 import { LicensePlate } from "@/components/license-plate"
 import { fetchCars, fetchModels, createCar, updateCar, createModel, updateModel, createVisit, fetchUserByPhone, createUser, type CreateCarPayload, type UpdateCarPayload, type CreateUserPayload } from "@/lib/api"
+import { ocrLicensePlate, captureFrame } from "@/lib/ocr"
+import { AlertCircle } from "lucide-react"
+import { toast } from "sonner"
 
 // ------------------- state اولیه -------------------
 const emptyForm = {
@@ -67,6 +70,8 @@ export function AddCarDialog({ onSuccess }: { onSuccess?: () => void } = {}) {
   const [scanning, setScanning] = useState(false)
   const videoRef = useRef<HTMLVideoElement>(null)
   const streamRef = useRef<MediaStream | null>(null)
+  const [ocrError, setOcrError] = useState("")
+  const [capturedImage, setCapturedImage] = useState<string | null>(null)
 
   // جستجوی خودرو با پلاک
   const [allCars, setAllCars] = useState<ApiCar[]>([])
@@ -209,25 +214,221 @@ export function AddCarDialog({ onSuccess }: { onSuccess?: () => void } = {}) {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
       streamRef.current = stream
-      if (videoRef.current) videoRef.current.srcObject = stream
+      // ابتدا camActive را true می‌کنیم تا المنت <video> رندر شود
+      // سپس در useEffect زیر، stream به آن اختصاص بده
       setCamActive(true)
     } catch {
       alert("دسترسی به دوربین امکان‌پذیر نیست. پلاک را دستی وارد کنید.")
     }
   }
 
-  const capturePlate = () => {
-    setScanning(true)
-    setTimeout(() => {
-      const two = String(Math.floor(10 + Math.random() * 89))
-      const three = String(Math.floor(100 + Math.random() * 899))
-      const region = String(Math.floor(10 + Math.random() * 89))
-      const letter = PLATE_LETTERS[Math.floor(Math.random() * 12)]
-      setForm((f) => ({ ...f, twoDigits: two, letter, threeDigits: three, region }))
-      setScanning(false)
-      stopCamera()
-    }, 1600)
-  }
+  // وقتی camActive true شد و المنت <video> در DOM رندر شد، stream را به آن اختصاص بده
+  useEffect(() => {
+    if (camActive && streamRef.current && videoRef.current) {
+      videoRef.current.srcObject = streamRef.current
+      videoRef.current.play().catch(() => {})
+    }
+  }, [camActive])
+
+  // Preprocess the captured image to improve OCR accuracy
+  const preprocessImage = async (src: string): Promise<string> => {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.crossOrigin = "anonymous";
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        const w = img.width;
+        const h = img.height;
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext("2d")!;
+        ctx.drawImage(img, 0, 0, w, h);
+
+        // Convert to grayscale and apply contrast enhancement
+        const imageData = ctx.getImageData(0, 0, w, h);
+        const data = imageData.data;
+
+        // Step 1: Grayscale conversion
+        const gray = new Uint8ClampedArray(data.length / 4);
+        for (let i = 0; i < data.length; i += 4) {
+          gray[i / 4] = Math.round(data[i] * 0.299 + data[i + 1] * 0.587 + data[i + 2] * 0.114);
+        }
+
+        // Step 2: Adaptive thresholding (Otsu's method approximation)
+        const histogram = new Array(256).fill(0);
+        for (let i = 0; i < gray.length; i++) histogram[gray[i]]++;
+        const total = gray.length;
+        let sumAll = 0;
+        for (let i = 0; i < 256; i++) sumAll += i * histogram[i];
+        let sumB = 0;
+        let wB = 0;
+        let wF = 0;
+        let maxVariance = 0;
+        let threshold = 128;
+        for (let t = 0; t < 256; t++) {
+          wB += histogram[t];
+          if (wB === 0) continue;
+          wF = total - wB;
+          if (wF === 0) break;
+          sumB += t * histogram[t];
+          const mB = sumB / wB;
+          const mF = (sumAll - sumB) / wF;
+          const variance = wB * wF * (mB - mF) * (mB - mF);
+          if (variance > maxVariance) {
+            maxVariance = variance;
+            threshold = t;
+          }
+        }
+
+        // Apply threshold
+        for (let i = 0; i < gray.length; i++) {
+          const v = gray[i] > threshold ? 255 : 0;
+          data[i * 4] = v;
+          data[i * 4 + 1] = v;
+          data[i * 4 + 2] = v;
+          data[i * 4 + 3] = 255;
+        }
+
+        ctx.putImageData(imageData, 0, 0);
+        resolve(canvas.toDataURL("image/png"));
+      };
+      img.onerror = () => resolve(src);
+      img.src = src;
+    });
+  };
+
+  // Clean extracted OCR text to match Iranian plate pattern
+  const cleanPlateText = (raw: string): string => {
+    // Persian/Arabic character mapping to Farsi digits
+    const charMap: Record<string, string> = {
+      "٠": "0", "١": "1", "٢": "2", "٣": "3", "٤": "4",
+      "۰": "0", "۱": "1", "۲": "2", "۳": "3", "۴": "4",
+      "۵": "5", "۶": "6", "۷": "7", "۸": "8", "۹": "9",
+      "ۚ": "", "ۛ": "", "۝": "",
+    };
+
+    // Normalize characters
+    let cleaned = raw.toUpperCase();
+    for (const [k, v] of Object.entries(charMap)) cleaned = cleaned.replaceAll(k, v);
+
+    // Remove non-alphanumeric and non-Farsi chars (keep Persian letters and digits)
+    const persianPlateLetters = "ابپتثجچحخدذرزژسشصضطظعغفقکگلمنوهی";
+
+    // Extract segments: two groups of digits, possibly separated by a Persian letter + separator
+    const digits = cleaned.replace(/[^0-9۰-۹]/g, "").replace(/[۰-۹]/g, (m) => charMap[m] || m);
+    const letters = cleaned.replace(/[^A-Z\u0600-\u06FF]/g, "");
+
+    return `${digits} ${letters}`.trim();
+  };
+
+  const capturePlate = async () => {
+    if (!videoRef.current || !camActive) return;
+
+    try {
+      setScanning(true);
+
+      // Capture frame from video
+      const canvas = document.createElement("canvas");
+      canvas.width = videoRef.current.videoWidth;
+      canvas.height = videoRef.current.videoHeight;
+      const ctx = canvas.getContext("2d")!;
+      ctx.drawImage(videoRef.current, 0, 0);
+
+      const imageData = canvas.toDataURL("image/png");
+      setCapturedImage(imageData);
+
+      // Preprocess the image for better OCR
+      const processed = await preprocessImage(imageData);
+
+      // Use Tesseract.js for OCR
+      const { createWorker } = await import("tesseract.js");
+      const worker = await createWorker(["fas", "eng"], 1);
+
+      const { data } = await worker.recognize(processed);
+      await worker.terminate();
+
+      // Try to extract plate number from OCR result
+      const rawText = data.text?.trim() || "";
+      const confidence = data.confidence || 0;
+
+      console.log("OCR raw text:", rawText, "confidence:", confidence);
+
+      // Try to extract Iranian plate pattern from raw text
+      // Iranian plates: XX XXX XX or XX-XXX-XX (2 digits, 1-3 letter, up to 5 digits)
+      const persianDigits = "۰۱۲۳۴۵۶۷۸۹";
+      const digitPattern = "[0-9" + persianDigits + "]";
+
+      // Normalize Persian digits to English
+      let normalized = rawText;
+      for (let i = 0; i < 10; i++) {
+        const regex = new RegExp(`[${persianDigits[i]}${String.fromCodePoint(0x06F0 + i)}]`, "g");
+        normalized = normalized.replace(regex, String(i));
+      }
+
+      // Try multiple patterns for Iranian plates
+      const platePatterns = [
+        // Standard: 2 digits + letter + 3 digits + 2 digits (e.g., 12 الف 345 67)
+        new RegExp(`(\\d{2})\\s*[${"ابپتثجچحخدذرزژسشصضطظعغفقکگلمنوهی".split("").join("")}]\\s*(\\d{3})\\s*(\\d{2})`),
+        // Simple: 2 digits + letter(s) + 5 digits
+        new RegExp(`(\\d{2})\\s*([A-Z${"ابپتثجچحخدذرزژسشصضطظعغفقکگلمنوهی"}]+)\\s*(\\d{1,5})`),
+        // Any sequence with digits that looks like a plate
+        new RegExp(`(\\d{2,3})\\s*[A-Z${"ابپتثجچحخدذرزژسشصضطظعغفقکگلمنوهی"}]+\\s*(\\d{1,5})`),
+        // Fallback: just find any digits that could be a plate
+        /(\d{8,9})/,
+        /(\d{2}\s*\d{3}\s*\d{2})/,
+      ];
+
+      let plateNumber = "";
+      let matchFound = false;
+
+      for (const pattern of platePatterns) {
+        const match = normalized.match(pattern);
+        if (match) {
+          plateNumber = match[0].replace(/\s+/g, " ").trim();
+          matchFound = true;
+          break;
+        }
+      }
+
+      // If no pattern matched, try to use the raw text directly (cleaned)
+      if (!matchFound && normalized.replace(/\s/g, "").length >= 5) {
+        // Extract only the most plate-like segment
+        const segments = normalized.split(/[\n\r]+/).map((s) => s.trim()).filter(Boolean);
+        plateNumber = segments.sort((a, b) => {
+          const digitCountA = (a.match(/\d/g) || []).length;
+          const digitCountB = (b.match(/\d/g) || []).length;
+          return digitCountB - digitCountA;
+        })[0] || normalized.replace(/\s+/g, " ").trim();
+      }
+
+      // Clean and validate
+      plateNumber = plateNumber.replace(/[^0-9A-Z\u0600-\u06FF\s-]/g, "").trim();
+
+      setForm({
+        twoDigits: String(plateNumber[0] + plateNumber[1]),
+        letter: plateNumber[2],
+        threeDigits: String(plateNumber[3] + plateNumber[4]),
+        region: String(plateNumber[5] + plateNumber[6]),
+        color: "",
+        year: String(plateNumber[7] + plateNumber[8]),
+        ownerPhone: "",
+        ownerFirstName: "",
+        ownerLastName: "",
+        ownerEmail: "",
+        mileage: "",
+        note: "",
+      })
+      setCamActive(false);
+      stopCamera();
+    } catch (error) {
+      console.error("OCR Error:", error);
+      toast.error("خطا در پردازش تصویر. لطفاً دوباره تلاش کنید.");
+      setCamActive(false);
+      stopCamera();
+    } finally {
+      setScanning(false);
+    }
+  };
 
   // ------------------- ریست -------------------
   const reset = () => {
@@ -425,7 +626,7 @@ export function AddCarDialog({ onSuccess }: { onSuccess?: () => void } = {}) {
               {/* دوربین */}
               <div className="rounded-xl border border-border bg-muted/30 p-4">
                 <div className="mb-3 flex items-center justify-between">
-                  <span className="text-sm font-semibold text-muted-foreground">ثبت پلاک با دوربین</span>
+                  <span className="text-sm font-semibold text-muted-foreground">ثبت لاک با دوربین</span>
                   {camActive ? (
                     <Button variant="ghost" size="sm" onClick={stopCamera} className="gap-1.5 text-destructive">
                       <CameraOff className="size-4" /> خاموش کردن
@@ -440,7 +641,7 @@ export function AddCarDialog({ onSuccess }: { onSuccess?: () => void } = {}) {
                   <div className="space-y-3">
                     <div className="relative overflow-hidden rounded-lg bg-black">
                       {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
-                      <video ref={videoRef} autoPlay playsInline muted className="aspect-video w-full object-cover" />
+                      <video ref={videoRef} autoPlay playsInline muted onLoadedMetadata={() => { videoRef.current?.play().catch(() => {}) }} className="aspect-video w-full object-cover" />
                       <div className="pointer-events-none absolute inset-x-8 top-1/2 h-20 -translate-y-1/2 rounded-lg border-2 border-dashed border-primary/80" />
                     </div>
                     <Button onClick={capturePlate} disabled={scanning} className="w-full gap-2">
@@ -608,7 +809,7 @@ export function AddCarDialog({ onSuccess }: { onSuccess?: () => void } = {}) {
               {ownerNotFound && (
                 <div className="space-y-3">
                   <div className="rounded-lg border border-dashed border-border bg-muted/40 px-4 py-3 text-sm text-muted-foreground">
-                    کاربری با این شماره یافت نشد. می‌توانید مالک جدید ثبت کنید یا بدون مالک ادامه دهید.
+                    کربری با این شماره یافت نشد. می‌توانید مالک جدید ثبت کنید یا بدون مالک ادامه دهید.
                   </div>
                   <div className="flex items-center gap-2">
                     <Button
@@ -991,7 +1192,7 @@ export function AddCarDialog({ onSuccess }: { onSuccess?: () => void } = {}) {
           {/* ماشین جدید */}
           {step === "info" && !selectedCar && (
             <Button onClick={handleSubmit} disabled={submitting || !modelValid} className="gap-2 font-semibold">
-              {submitting ? <><Loader2 className="size-4 animate-spin" /> در حال ذخیره...</> : <><Plus className="size-4" /> ثبت خودروی جدید</>}
+              {submitting ? <><Loader2 className="size-4 animate-spin" /> در حال ذخیره...</> : <><Plus className="size-4" /> ثبت خودروی دید</>}
             </Button>
           )}
         </DialogFooter>
