@@ -159,7 +159,7 @@ export async function updateServiceOrderStatus(
   status: ServiceOrderStatus,
 ): Promise<ServiceOrder> {
   const { data } = await http.patch<ServiceOrder>(
-    `garage/visits/${visitId}/service_orders/${orderId}/`,
+    `garage/service_orders/${orderId}/`,
     { status },
   )
   return data
@@ -173,5 +173,5 @@ export async function deleteServiceOrder(
   visitId: number,
   orderId: number,
 ): Promise<void> {
-  await http.delete(`garage/visits/${visitId}/service_orders/${orderId}/`)
+  await http.delete(`garage/service_orders/${orderId}/`)
 }
