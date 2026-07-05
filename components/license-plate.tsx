@@ -124,6 +124,7 @@ export function LicensePlate({
       </div>
       {/* کد شهر */}
       <div className={cn("flex flex-col items-center justify-center border-r-2 border-black/30 font-mono", s.gap)}>
+        <span className="leading-none text-[0.5em] font-sans font-normal">ایران</span>
         {editable ? (
           <PlateInput value={plate.region} onChange={(v) => set("region", v)} maxLength={2} placeholder="۱۱" className={s.input} />
         ) : (
