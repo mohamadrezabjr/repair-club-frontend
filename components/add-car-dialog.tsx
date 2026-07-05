@@ -450,57 +450,26 @@ export function AddCarDialog({ onSuccess }: { onSuccess?: () => void } = {}) {
                 )}
               </div>
 
-              {/* پیش‌نمایش پلاک */}
+              {/* پلاک با ورودی‌های یکپارچه */}
               <div className="flex justify-center">
                 <LicensePlate
                   plate={{
-                    twoDigits: form.twoDigits || "۰۰",
+                    twoDigits: form.twoDigits,
                     letter: form.letter,
-                    threeDigits: form.threeDigits || "۰۰۰",
-                    region: form.region || "۰۰",
+                    threeDigits: form.threeDigits,
+                    region: form.region,
                   }}
                   size="lg"
+                  editable
+                  onPlateChange={(p) => {
+                    set("twoDigits", p.twoDigits)
+                    set("letter", p.letter)
+                    set("threeDigits", p.threeDigits)
+                    set("region", p.region)
+                    setSelectedCar(null)
+                    setPlateDropOpen(true)
+                  }}
                 />
-              </div>
-
-              {/* ورود دستی پلاک */}
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                <div className="space-y-1.5">
-                  <Label>دو رقم</Label>
-                  <Input
-                    inputMode="numeric" maxLength={2}
-                    value={form.twoDigits}
-                    onChange={(e) => { set("twoDigits", e.target.value.replace(/\D/g, "")); setSelectedCar(null); setPlateDropOpen(true) }}
-                    placeholder="۱۲" className="text-center"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label>حرف</Label>
-                  <Select value={form.letter} onValueChange={(v) => { set("letter", v ?? "ب"); setSelectedCar(null) }}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {PLATE_LETTERS.map((l) => <SelectItem key={l} value={l}>{l}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-1.5">
-                  <Label>سه رقم</Label>
-                  <Input
-                    inputMode="numeric" maxLength={3}
-                    value={form.threeDigits}
-                    onChange={(e) => { set("threeDigits", e.target.value.replace(/\D/g, "")); setSelectedCar(null); setPlateDropOpen(true) }}
-                    placeholder="۳۴۵" className="text-center"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label>کد شهر</Label>
-                  <Input
-                    inputMode="numeric" maxLength={2}
-                    value={form.region}
-                    onChange={(e) => { set("region", e.target.value.replace(/\D/g, "")); setSelectedCar(null); setPlateDropOpen(true) }}
-                    placeholder="۱۱" className="text-center"
-                  />
-                </div>
               </div>
 
               {/* dropdown جستجوی پلاک */}
