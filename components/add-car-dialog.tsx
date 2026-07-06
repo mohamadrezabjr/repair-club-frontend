@@ -101,7 +101,7 @@ function buildCarPayload(
       }
 
   return {
-    owner: ownerPhone,
+    ...(ownerPhone ? { owner: ownerPhone } : {}),
     model: modelPayload,
     in_garage: true,
     plate_first: Number(plate.twoDigits),
@@ -253,15 +253,19 @@ export function AddCarDialog({ onSuccess }: { onSuccess?: () => void } = {}) {
   }, [open])
 
   useEffect(() => {
+    if (!open) return
+    if (allModels.length === 0) {
+      setModelsLoading(true)
+      fetchModels().then(setAllModels).finally(() => setModelsLoading(false))
+    }
+  }, [open])
+
+  useEffect(() => {
     if (step !== "orders") return
     Promise.all([fetchServices(), fetchProducts()]).then(([s, p]) => {
       setAllServices(s)
       setAllProducts(p)
     })
-    if (allModels.length === 0) {
-      setModelsLoading(true)
-      fetchModels().then(setAllModels).finally(() => setModelsLoading(false))
-    }
   }, [step])
 
   // ── دوربین ────────────────────────────────────────────────────
