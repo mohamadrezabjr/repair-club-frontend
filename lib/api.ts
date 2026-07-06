@@ -139,7 +139,7 @@ export type MegaCarModelPayload =
 export type MegaCarPayload =
   | { id: number }
   | {
-      owner: string // شماره تلفن
+      owner?: string // شماره تلفن (اختیاری)
       model: MegaCarModelPayload
       manufacturing_year?: number
       in_garage: boolean
