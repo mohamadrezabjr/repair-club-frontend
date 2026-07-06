@@ -9,7 +9,8 @@ export function toEn(input: string): string {
 }
 
 export function formatToman(value: number): string {
-  return toFa(value.toLocaleString("en-US")) + " تومان"
+  const safeValue = value ?? 0;
+  return toFa(safeValue.toLocaleString("en-US")) + " تومان"
 }
 
 export function timeAgo(ts: number): string {

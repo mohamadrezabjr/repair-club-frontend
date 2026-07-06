@@ -24,9 +24,11 @@ import {
 } from "@/components/ui/select"
 import { PLATE_LETTERS, type ApiCar, type ApiCarModel, type ApiUser } from "@/lib/types"
 import { toFa } from "@/lib/format"
-import { useGarage } from "@/components/garage-provider"
 import { LicensePlate } from "@/components/license-plate"
 import { fetchCars, fetchModels, createCar, updateCar, createModel, updateModel, createVisit, fetchUserByPhone, createUser, type CreateCarPayload, type UpdateCarPayload, type CreateUserPayload } from "@/lib/api"
+import { ocrLicensePlate, captureFrame } from "@/lib/ocr"
+import { AlertCircle } from "lucide-react"
+import { toast } from "sonner"
 
 // ------------------- state اولیه -------------------
 const emptyForm = {
@@ -54,8 +56,7 @@ const emptyModel = {
 type Step = "plate" | "owner" | "info"
 
 // ------------------- کامپوننت -------------------
-export function AddCarDialog() {
-  const { addCar } = useGarage()
+export function AddCarDialog({ onSuccess }: { onSuccess?: () => void } = {}) {
   const [open, setOpen] = useState(false)
   const [step, setStep] = useState<Step>("plate")
 
@@ -69,6 +70,8 @@ export function AddCarDialog() {
   const [scanning, setScanning] = useState(false)
   const videoRef = useRef<HTMLVideoElement>(null)
   const streamRef = useRef<MediaStream | null>(null)
+  const [ocrError, setOcrError] = useState("")
+  const [capturedImage, setCapturedImage] = useState<string | null>(null)
 
   // جستجوی خودرو با پلاک
   const [allCars, setAllCars] = useState<ApiCar[]>([])
@@ -149,9 +152,9 @@ export function AddCarDialog() {
     ? allModels.slice(0, 8)
     : allModels.filter(
         (m) =>
-          m.make.includes(modelSearch) ||
+          (m.make ?? "").includes(modelSearch) ||
           m.model.includes(modelSearch) ||
-          String(m.model_year).includes(modelSearch),
+          String(m.model_year ?? "").includes(modelSearch),
       )
 
   // ------------------- انتخاب ماشین از dropdown -------------------
@@ -177,11 +180,13 @@ export function AddCarDialog() {
     // پر کردن فرم ادیت مدل با اطلاعات مدل فعلی ماشین
     setSelectedModel(car.model ?? null)
     if (car.model) {
-      setModelSearch(`${car.model.make} ${car.model.model} ${car.model.model_year}`)
+      setModelSearch(
+        `${car.model.make ?? ""} ${car.model.model} ${car.model.model_year ?? ""}`.trim(),
+      )
       setEditModelForm({
-        make: car.model.make,
+        make: car.model.make ?? "",
         model: car.model.model,
-        model_year: String(car.model.model_year),
+        model_year: car.model.model_year != null ? String(car.model.model_year) : "",
         transmission_type: (car.model.transmission_type as "man" | "auto") ?? "man",
       })
     } else {
@@ -195,7 +200,7 @@ export function AddCarDialog() {
     setSelectedModel(model)
     setIsNewModel(false)
     setModelDropOpen(false)
-    setModelSearch(`${model.make} ${model.model} ${model.model_year}`)
+    setModelSearch(`${model.make ?? ""} ${model.model} ${model.model_year ?? ""}`.trim())
   }, [])
 
   // ------------------- دوربین -------------------
@@ -209,25 +214,86 @@ export function AddCarDialog() {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
       streamRef.current = stream
-      if (videoRef.current) videoRef.current.srcObject = stream
+      // ابتدا camActive را true می‌کنیم تا المنت <video> رندر شود
+      // سپس در useEffect زیر، stream به آن اختصاص بده
       setCamActive(true)
     } catch {
       alert("دسترسی به دوربین امکان‌پذیر نیست. پلاک را دستی وارد کنید.")
     }
   }
 
-  const capturePlate = () => {
+  // وقتی camActive true شد و المنت <video> در DOM رندر شد، stream را به آن اختصاص بده
+  useEffect(() => {
+    if (camActive && streamRef.current && videoRef.current) {
+      videoRef.current.srcObject = streamRef.current
+      videoRef.current.play().catch(() => {})
+    }
+  }, [camActive])
+
+  // Clean extracted OCR text to match Iranian plate pattern
+  const cleanPlateText = (raw: string): string => {
+    // Persian/Arabic character mapping to Farsi digits
+    const charMap: Record<string, string> = {
+      "٠": "0", "١": "1", "٢": "2", "٣": "3", "٤": "4",
+      "۰": "0", "۱": "1", "۲": "2", "۳": "3", "۴": "4",
+      "۵": "5", "۶": "6", "۷": "7", "۸": "8", "۹": "9",
+      "ۚ": "", "ۛ": "", "۝": "",
+    };
+
+    // Normalize characters
+    let cleaned = raw.toUpperCase();
+    for (const [k, v] of Object.entries(charMap)) cleaned = cleaned.replaceAll(k, v);
+
+    // Remove non-alphanumeric and non-Farsi chars (keep Persian letters and digits)
+    const persianPlateLetters = "ابپتثجچحخدذرزژسشصضطظعغفقکگلمنوهی";
+
+    // Extract segments: two groups of digits, possibly separated by a Persian letter + separator
+    const digits = cleaned.replace(/[^0-9۰-۹]/g, "").replace(/[۰-۹]/g, (m) => charMap[m] || m);
+    const letters = cleaned.replace(/[^A-Z\u0600-\u06FF]/g, "");
+
+    return `${digits} ${letters}`.trim();
+  };
+
+  const capturePlate = async () => {
+    if (!videoRef.current) return
+
     setScanning(true)
-    setTimeout(() => {
-      const two = String(Math.floor(10 + Math.random() * 89))
-      const three = String(Math.floor(100 + Math.random() * 899))
-      const region = String(Math.floor(10 + Math.random() * 89))
-      const letter = PLATE_LETTERS[Math.floor(Math.random() * 12)]
-      setForm((f) => ({ ...f, twoDigits: two, letter, threeDigits: three, region }))
-      setScanning(false)
+    setOcrError("")
+
+    try {
+      // گرفتن عکس از دوربین
+      const frame = captureFrame(videoRef.current)
+      setCapturedImage(frame)
+
+      // OCR روی عکس
+      const result = await ocrLicensePlate(videoRef.current)
+
+      if (result.success) {
+        // فقط وقتی موفق بود فرم رو پر کن
+        set("twoDigits", result.plate.twoDigits)
+        set("letter", result.plate.letter)
+        set("threeDigits", result.plate.threeDigits)
+        set("region", result.plate.region)
+        setOcrError("")
+        toast.success("پلاک با موفقیت خوانده شد")
+      } else {
+        // خطا نشون بده — فرم رو پر نکن
+        setOcrError(result.message || "مشکل در خواندن پلاک")
+        toast.error(result.message || "مشکل در خواندن پلاک")
+      }
+
+      // بستن دوربین بعد از گرفتن عکس
       stopCamera()
-    }, 1600)
+    } catch (error) {
+      console.error("خطا در OCR:", error)
+      setOcrError("خطا در خواندن پلاک. لطفاً دوباره تلاش کنید")
+      toast.error("خطا در خواندن پلاک. لطفاً دوباره تلاش کنید")
+      stopCamera()
+    } finally {
+      setScanning(false)
+    }
   }
+
 
   // ------------------- ریست -------------------
   const reset = () => {
@@ -301,7 +367,7 @@ export function AddCarDialog() {
         transmission_type: editModelForm.transmission_type,
       })
       setSelectedModel(updated)
-      setModelSearch(`${updated.make} ${updated.model} ${updated.model_year}`)
+      setModelSearch(`${updated.make ?? ""} ${updated.model} ${updated.model_year ?? ""}`.trim())
       setEditingModel(false)
     } catch (e: unknown) {
       setSubmitError(e instanceof Error ? e.message : "خطا در به‌روزرسانی مدل")
@@ -336,29 +402,8 @@ export function AddCarDialog() {
       let finalCarId: number
 
       if (selectedCar) {
-        // ماشین موجود — فقط visit می‌سازیم، هیچ چیز آپدیت نمی‌شه
+        // ماشین موجود — فقط visit می‌سازیم
         finalCarId = selectedCar.id
-
-        const ownerFullName = [
-          selectedCar.owner?.profile?.first_name,
-          selectedCar.owner?.profile?.last_name,
-        ].filter(Boolean).join(" ")
-        addCar({
-          plate: {
-            twoDigits: String(selectedCar.plate_first),
-            letter: selectedCar.plate_letter,
-            threeDigits: String(selectedCar.plate_second),
-            region: String(selectedCar.plate_region),
-          },
-          brand: selectedCar.model?.make ?? "",
-          model: selectedCar.model?.model ?? "",
-          color: "",
-          year: String(selectedCar.manufacturing_year ?? ""),
-          ownerName: ownerFullName,
-          ownerPhone: selectedCar.owner?.phone ?? "",
-          ownerEmail: selectedCar.owner?.profile?.email,
-          note: visitDescription,
-        })
       } else {
         // ماشین جدید
 
@@ -404,24 +449,6 @@ export function AddCarDialog() {
         }
         const createdCar = await createCar(carPayload)
         finalCarId = createdCar.id
-
-        const ownerFullName = [form.ownerFirstName, form.ownerLastName].filter(Boolean).join(" ")
-        addCar({
-          plate: {
-            twoDigits: form.twoDigits,
-            letter: form.letter,
-            threeDigits: form.threeDigits,
-            region: form.region,
-          },
-          brand: createdCar.model?.make ?? newModelForm.make,
-          model: createdCar.model?.model ?? newModelForm.model,
-          color: form.color,
-          year: form.year,
-          ownerName: ownerFullName,
-          ownerPhone: form.ownerPhone,
-          ownerEmail: form.ownerEmail || undefined,
-          note: visitDescription || form.note,
-        })
       }
 
       // POST ویزیت
@@ -429,6 +456,7 @@ export function AddCarDialog() {
 
       reset()
       setOpen(false)
+      onSuccess?.()
     } catch (e: unknown) {
       setSubmitError(e instanceof Error ? e.message : "خطایی رخ داد. دوباره تلاش کنید.")
     } finally {
@@ -478,7 +506,7 @@ export function AddCarDialog() {
                   <div className="space-y-3">
                     <div className="relative overflow-hidden rounded-lg bg-black">
                       {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
-                      <video ref={videoRef} autoPlay playsInline muted className="aspect-video w-full object-cover" />
+                      <video ref={videoRef} autoPlay playsInline muted onLoadedMetadata={() => { videoRef.current?.play().catch(() => {}) }} className="aspect-video w-full object-cover" />
                       <div className="pointer-events-none absolute inset-x-8 top-1/2 h-20 -translate-y-1/2 rounded-lg border-2 border-dashed border-primary/80" />
                     </div>
                     <Button onClick={capturePlate} disabled={scanning} className="w-full gap-2">
@@ -488,57 +516,26 @@ export function AddCarDialog() {
                 )}
               </div>
 
-              {/* پیش‌نمایش پلاک */}
+              {/* پلاک با ورودی‌های یکپارچه */}
               <div className="flex justify-center">
                 <LicensePlate
                   plate={{
-                    twoDigits: form.twoDigits || "۰۰",
+                    twoDigits: form.twoDigits,
                     letter: form.letter,
-                    threeDigits: form.threeDigits || "۰۰۰",
-                    region: form.region || "۰۰",
+                    threeDigits: form.threeDigits,
+                    region: form.region,
                   }}
                   size="lg"
+                  editable
+                  onPlateChange={(p) => {
+                    set("twoDigits", p.twoDigits)
+                    set("letter", p.letter)
+                    set("threeDigits", p.threeDigits)
+                    set("region", p.region)
+                    setSelectedCar(null)
+                    setPlateDropOpen(true)
+                  }}
                 />
-              </div>
-
-              {/* ورود دستی پلاک */}
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                <div className="space-y-1.5">
-                  <Label>دو رقم</Label>
-                  <Input
-                    inputMode="numeric" maxLength={2}
-                    value={form.twoDigits}
-                    onChange={(e) => { set("twoDigits", e.target.value.replace(/\D/g, "")); setSelectedCar(null); setPlateDropOpen(true) }}
-                    placeholder="۱۲" className="text-center"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label>حرف</Label>
-                  <Select value={form.letter} onValueChange={(v) => { set("letter", v ?? "ب"); setSelectedCar(null) }}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {PLATE_LETTERS.map((l) => <SelectItem key={l} value={l}>{l}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-1.5">
-                  <Label>سه رقم</Label>
-                  <Input
-                    inputMode="numeric" maxLength={3}
-                    value={form.threeDigits}
-                    onChange={(e) => { set("threeDigits", e.target.value.replace(/\D/g, "")); setSelectedCar(null); setPlateDropOpen(true) }}
-                    placeholder="۳۴۵" className="text-center"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label>کد شهر</Label>
-                  <Input
-                    inputMode="numeric" maxLength={2}
-                    value={form.region}
-                    onChange={(e) => { set("region", e.target.value.replace(/\D/g, "")); setSelectedCar(null); setPlateDropOpen(true) }}
-                    placeholder="۱۱" className="text-center"
-                  />
-                </div>
               </div>
 
               {/* dropdown جستجوی پلاک */}
@@ -677,7 +674,7 @@ export function AddCarDialog() {
               {ownerNotFound && (
                 <div className="space-y-3">
                   <div className="rounded-lg border border-dashed border-border bg-muted/40 px-4 py-3 text-sm text-muted-foreground">
-                    کاربری با این شماره یافت نشد. می‌توانید مالک جدید ثبت کنید یا بدون مالک ادامه دهید.
+                    کربری با این شماره یافت نشد. می‌توانید مالک جدید ثبت کنید یا بدون مالک ادامه دهید.
                   </div>
                   <div className="flex items-center gap-2">
                     <Button
@@ -1060,7 +1057,7 @@ export function AddCarDialog() {
           {/* ماشین جدید */}
           {step === "info" && !selectedCar && (
             <Button onClick={handleSubmit} disabled={submitting || !modelValid} className="gap-2 font-semibold">
-              {submitting ? <><Loader2 className="size-4 animate-spin" /> در حال ذخیره...</> : <><Plus className="size-4" /> ثبت خودروی جدید</>}
+              {submitting ? <><Loader2 className="size-4 animate-spin" /> در حال ذخیره...</> : <><Plus className="size-4" /> ثبت خودروی دید</>}
             </Button>
           )}
         </DialogFooter>

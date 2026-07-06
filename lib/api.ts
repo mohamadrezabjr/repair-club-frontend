@@ -1,24 +1,19 @@
-import type { ApiCar, ApiCarModel, ApiUser } from "@/lib/types"
-
-const BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? ""
+import type { ApiCar, ApiCarModel, ApiUser, ApiVisit, Service, ServiceOrder, ServiceOrderStatus } from "@/lib/types"
+import { http } from "@/lib/http"
 
 export async function fetchCars(): Promise<ApiCar[]> {
-  if (!BASE_URL) return []
   try {
-    const res = await fetch(`${BASE_URL}/service/cars/`, { cache: "no-store" })
-    if (!res.ok) throw new Error(`HTTP ${res.status}`)
-    return res.json()
+    const { data } = await http.get<ApiCar[]>("garage/cars/")
+    return data
   } catch {
     return []
   }
 }
 
 export async function fetchModels(): Promise<ApiCarModel[]> {
-  if (!BASE_URL) return []
   try {
-    const res = await fetch(`${BASE_URL}/service/models/`, { cache: "no-store" })
-    if (!res.ok) throw new Error(`HTTP ${res.status}`)
-    return res.json()
+    const { data } = await http.get<ApiCarModel[]>("garage/models/")
+    return data
   } catch {
     return []
   }
@@ -36,13 +31,8 @@ export interface CreateCarPayload {
 }
 
 export async function createCar(body: CreateCarPayload): Promise<ApiCar> {
-  const res = await fetch(`${BASE_URL}/service/cars/create`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  })
-  if (!res.ok) throw new Error("خطا در ایجاد خودرو")
-  return res.json()
+  const { data } = await http.post<ApiCar>("garage/cars/", body)
+  return data
 }
 
 export interface UpdateCarPayload {
@@ -52,43 +42,26 @@ export interface UpdateCarPayload {
 }
 
 export async function updateCar(id: number, body: UpdateCarPayload): Promise<ApiCar> {
-  const res = await fetch(`${BASE_URL}/service/cars/${id}`, {
-    method: "PATCH",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  })
-  if (!res.ok) throw new Error("خطا در به‌روزرسانی خودرو")
-  return res.json()
+  const { data } = await http.patch<ApiCar>(`garage/cars/${id}`, body)
+  return data
 }
 
 export async function createModel(body: Omit<ApiCarModel, "id">): Promise<ApiCarModel> {
-  const res = await fetch(`${BASE_URL}/service/models/create/`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  })
-  if (!res.ok) throw new Error("خطا در ایجاد مدل")
-  return res.json()
+  const { data } = await http.post<ApiCarModel>("garage/models/", body)
+  return data
 }
 
 export async function updateModel(id: number, body: Partial<Omit<ApiCarModel, "id">>): Promise<ApiCarModel> {
-  const res = await fetch(`${BASE_URL}/service/models/${id}`, {
-    method: "PATCH",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  })
-  if (!res.ok) throw new Error("خطا در به‌روزرسانی مدل")
-  return res.json()
+  const { data } = await http.patch<ApiCarModel>(`garage/models/${id}`, body)
+  return data
 }
 
 // جستجوی یوزر با شماره — اگه پیدا نشد null برمی‌گردونه
 export async function fetchUserByPhone(phone: string): Promise<ApiUser | null> {
-  if (!BASE_URL) return null
   try {
-    const res = await fetch(`${BASE_URL}/service/users?phone=${encodeURIComponent(phone)}`, { cache: "no-store" })
-    if (!res.ok) return null
-    const data = await res.json()
-    // ممکنه آرایه بیاد یا تک آبجکت
+    const { data } = await http.get<ApiUser | ApiUser[]>(`service/users`, {
+      params: { phone },
+    })
     if (Array.isArray(data)) return data.length > 0 ? data[0] : null
     return data ?? null
   } catch {
@@ -104,21 +77,101 @@ export interface CreateUserPayload {
 }
 
 export async function createUser(body: CreateUserPayload): Promise<ApiUser> {
-  const res = await fetch(`${BASE_URL}/service/users`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  })
-  if (!res.ok) throw new Error("خطا در ایجاد کاربر")
-  return res.json()
+  const { data } = await http.post<ApiUser>("service/users", body)
+  return data
 }
 
 export async function createVisit(carId: number, description: string): Promise<unknown> {
-  const res = await fetch(`${BASE_URL}/service/visits/create`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ car: carId, description }),
+  const { data } = await http.post<unknown>("garage/visits/", {
+    car: carId,
+    description,
   })
-  if (!res.ok) throw new Error("خطا در ثبت ویزیت")
-  return res.json()
+  return data
+}
+
+/** دریافت تمام ویزیت‌ها از API */
+export async function fetchVisits(): Promise<ApiVisit[]> {
+  try {
+    const { data } = await http.get<ApiVisit[]>("garage/visits/")
+    return data
+  } catch {
+    return []
+  }
+}
+
+/** دریافت لیست سرویس‌های پایه */
+export async function fetchServices(): Promise<Service[]> {
+  try {
+    const { data } = await http.get<Service[]>("garage/services/")
+    return data
+  } catch {
+    return []
+  }
+}
+
+// ─── Service Orders ──────────────────────────────────────────────────────────
+
+/** پیلود سرویس داخل یک service_order */
+export type ServicePayload =
+  | { id: number }                                              // سرویس موجود
+  | {                                                           // سرویس جدید
+      id: null
+      title: string
+      description?: string | null
+      base_price?: number | null
+      mileage_interval?: number | null
+      car_model?: number | null
+      products_needed?: number[]
+    }
+
+export interface ServiceOrderPayload {
+  id: number | null
+  service: ServicePayload
+  title?: string | null
+  extra_description?: string | null
+  price: number
+  status: ServiceOrderStatus
+}
+
+/**
+ * افزودن/ویرایش سرویس‌های یک ویزیت
+ * POST garage/visits/<visit_id>/service_orders/
+ * پاسخ: ویزیت به‌روزشده
+ */
+export async function saveServiceOrders(
+  visitId: number,
+  serviceOrders: ServiceOrderPayload[],
+): Promise<ApiVisit> {
+  const { data } = await http.post<ApiVisit>(
+    `garage/visits/${visitId}/service_orders/`,
+    { service_orders: serviceOrders },
+  )
+  return data
+}
+
+/**
+ * تغییر وضعیت یک سرویس‌اوردر
+ * PATCH garage/visits/<visit_id>/service_orders/<order_id>/
+ */
+export async function updateServiceOrderStatus(
+  visitId: number,
+  orderId: number,
+  status: ServiceOrderStatus,
+): Promise<ServiceOrder> {
+  const { data } = await http.patch<ServiceOrder>(
+    `garage/service_orders/${orderId}/`,
+    { status },
+  )
+  return data
+}
+
+/**
+ * حذف یک سرویس‌اوردر
+ * DELETE garage/visits/<visit_id>/service_orders/<order_id>/
+ */
+export async function deleteServiceOrder(
+  visitId: number,
+  orderId: number,
+): Promise<void> {
+  await http.delete(`garage/service_orders/${orderId}/`)
 }

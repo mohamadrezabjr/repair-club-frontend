@@ -44,13 +44,17 @@ function Button({
   className,
   variant = 'default',
   size = 'default',
+  render,
   ...props
-}: ButtonPrimitive.Props & VariantProps<typeof buttonVariants>) {
+}: ButtonPrimitive.Props & VariantProps<typeof buttonVariants> & { asChild?: boolean }) {
+  // `asChild` is a Radix UI pattern not supported by @base-ui/react — drop it silently
+  const { asChild: _asChild, ...rest } = props as typeof props & { asChild?: boolean }
   return (
     <ButtonPrimitive
       data-slot="button"
       className={cn(buttonVariants({ variant, size, className }))}
-      {...props}
+      render={render}
+      {...rest}
     />
   )
 }
