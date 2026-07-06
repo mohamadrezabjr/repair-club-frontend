@@ -1,4 +1,4 @@
-import type { ApiCar, ApiCarModel, ApiUser, ApiVisit, Service, ServiceOrder, ServiceOrderStatus } from "@/lib/types"
+import type { ApiCar, ApiCarModel, ApiUser, ApiVisit, Service, ServiceOrder, ServiceOrderStatus, Product, ProductType, VisitStatus } from "@/lib/types"
 import { http } from "@/lib/http"
 
 export async function fetchCars(): Promise<ApiCar[]> {
@@ -107,6 +107,92 @@ export async function fetchServices(): Promise<Service[]> {
   } catch {
     return []
   }
+}
+
+/** دریافت لیست محصولات/قطعات */
+export async function fetchProducts(): Promise<Product[]> {
+  try {
+    const { data } = await http.get<Product[]>("garage/products/")
+    return data
+  } catch {
+    return []
+  }
+}
+
+/** دریافت لیست انواع محصول */
+export async function fetchProductTypes(): Promise<ProductType[]> {
+  try {
+    const { data } = await http.get<ProductType[]>("garage/product-types/")
+    return data
+  } catch {
+    return []
+  }
+}
+
+// ─── Mega Visit Payload ──────────────────────────────────────────────────────
+
+/** طبق قانون sanitize: اگه موجود → فقط {id}؛ اگه جدید → دیتای کامل بدون id */
+export type MegaCarModelPayload =
+  | { id: number }
+  | { make: string; model: string; model_year: number; transmission_type: string }
+
+export type MegaCarPayload =
+  | { id: number }
+  | {
+      owner: string // شماره تلفن
+      model: MegaCarModelPayload
+      manufacturing_year?: number
+      in_garage: boolean
+      last_mileage?: number
+      plate_first: number
+      plate_letter: string
+      plate_second: number
+      plate_region: number
+    }
+
+export type MegaProductTypePayload =
+  | { id: number }
+  | { name: string; description?: string }
+
+export type MegaProductPayload =
+  | { id: number }
+  | { name: string; price: number; stock?: number; description?: string; product_type: MegaProductTypePayload }
+
+export type MegaServicePayload =
+  | { id: number }
+  | {
+      title: string
+      description?: string
+      base_price?: number
+      mileage_interval?: number
+      products_needed?: MegaProductPayload[]
+    }
+
+export interface MegaServiceOrderPayload {
+  service: MegaServicePayload
+  title?: string
+  extra_description?: string
+  price: number
+  status: ServiceOrderStatus
+}
+
+export interface MegaProductOrderPayload {
+  quantity: number
+  product: MegaProductPayload
+}
+
+export interface MegaVisitPayload {
+  car: MegaCarPayload
+  service_orders: MegaServiceOrderPayload[]
+  product_orders: MegaProductOrderPayload[]
+  status: VisitStatus
+  description?: string
+}
+
+/** ارسال کل ویزیت به صورت یک payload به /garage/visits/ */
+export async function createVisitMega(payload: MegaVisitPayload): Promise<ApiVisit> {
+  const { data } = await http.post<ApiVisit>("garage/visits/", payload)
+  return data
 }
 
 // ─── Service Orders ──────────────────────────────────────────────────────────
