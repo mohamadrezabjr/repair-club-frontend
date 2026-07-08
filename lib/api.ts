@@ -83,31 +83,47 @@ export async function createUser(body: CreateUserPayload): Promise<ApiUser> {
 
 // ─── Visits ─────────────────────────────────────────────────────────
 
-/** پیلود model برای افزودن ماشین در ویزیت جدید */
+/**
+ * پیلود مدل در بادی ویزیت:
+ * - اگر مدل موجود: { "id": 1 }
+ * - اگر مدل جدید: { "id": null, "make": "...", "model": "...", ... }
+ */
 export type VisitCarModelPayload =
-  | { id: number }                     // مدل موجود
-  | ApiCarModel                        // مدل جدید
+  | { id: number }
+  | {
+      id: null
+      make: string
+      model: string
+      model_year: number | null
+      transmission_type: "man" | "auto"
+    }
 
+/**
+ * بادی برای ساخت ویزیت با ماشین (موجود یا جدید)
+ * POST /garage/visits/
+ */
 export interface CreateVisitWithCarPayload {
-  service_orders?: ServiceOrderPayload[]  // سرویس‌ها (اختیاری)
   car: {
-    owner?: string                        // UUID مالک (اختیاری)
-    model: VisitCarModelPayload
+    id?: number | null              // اگر ماشین موجود باشد
+    owner?: string | null           // UUID مالک (اختیاری - برای ماشین جدید)
+    model: VisitCarModelPayload     // مدل موجود یا جدید
     manufacturing_year?: number | null
-    in_garage?: boolean
+    in_garage?: boolean             // پیش‌فرض: true
     last_mileage?: number | null
     plate_first: number
     plate_letter: string
     plate_second: number
     plate_region: number
   }
-  status?: "ready" | "queued" | "repairing" | "delivered" | "cancelled"
+  status?: "queued" | "repairing" | "ready" | "delivered" | "cancelled"
   description?: string | null
 }
 
 /**
  * ساخت ویزیت جدید با ماشین (موجود یا جدید)
- * POST garage/visits/
+ * POST /garage/visits/
+ * - برای ماشین موجود: car.id تعیین می‌شه و model.id و ... باقی فیلدها اختیاری
+ * - برای ماشین جدید: car.id را اختیاری بگذار یا حذف کن، model با اطلاعات کامل و id: null
  */
 export async function createVisitWithCar(
   payload: CreateVisitWithCarPayload,

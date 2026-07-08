@@ -149,7 +149,7 @@ export function VisitsDashboard() {
                 </Button>
               </div>
             )}
-            <AddCarDialog onSuccess={() => mutate()} />
+            <AddCarDialog onSuccessAction={() => mutate()} />
             <ThemeToggle />
           </div>
         </div>

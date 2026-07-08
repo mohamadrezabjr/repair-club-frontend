@@ -22,12 +22,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { PLATE_LETTERS, type ApiCar, type ApiCarModel, type ApiUser } from "@/lib/types"
+import { PLATE_LETTERS, type ApiCar, type ApiCarModel } from "@/lib/types"
 import { toFa } from "@/lib/format"
 import { LicensePlate } from "@/components/license-plate"
-import { fetchCars, fetchModels, updateCar, updateModel, createVisitWithCar, type UpdateCarPayload, type CreateVisitWithCarPayload } from "@/lib/api"
+import { fetchCars, fetchModels, createVisitWithCar, type CreateVisitWithCarPayload } from "@/lib/api"
 import { ocrLicensePlate, captureFrame } from "@/lib/ocr"
-import { AlertCircle } from "lucide-react"
 import { toast } from "sonner"
 
 // ------------------- state اولیه -------------------
@@ -56,7 +55,7 @@ const emptyModel = {
 type Step = "plate" | "info"
 
 // ------------------- کامپوننت -------------------
-export function AddCarDialog({ onSuccess }: { onSuccess?: () => void } = {}) {
+export function AddCarDialog({ onSuccessAction }: { onSuccessAction?: () => void } = {}) {
   const [open, setOpen] = useState(false)
   const [step, setStep] = useState<Step>("plate")
 
@@ -89,15 +88,6 @@ export function AddCarDialog({ onSuccess }: { onSuccess?: () => void } = {}) {
   const [newModelForm, setNewModelForm] = useState(emptyModel)
   const setNm = (key: keyof typeof emptyModel, value: string) =>
     setNewModelForm((f) => ({ ...f, [key]: value }))
-
-  // حالت ادیت مدل (وقتی مدل موجود انتخاب شده)
-  const [editingModel, setEditingModel] = useState(false)
-  const [editModelForm, setEditModelForm] = useState(emptyModel)
-  const setEm = (key: keyof typeof emptyModel, value: string) =>
-    setEditModelForm((f) => ({ ...f, [key]: value }))
-
-  // حالت ادیت اطلاعات ماشین (وقتی ماشین موجود انتخاب شده)
-  const [editingCar, setEditingCar] = useState(false)
 
   // توضیحات ویزیت
   const [visitDescription, setVisitDescription] = useState("")
@@ -154,7 +144,6 @@ export function AddCarDialog({ onSuccess }: { onSuccess?: () => void } = {}) {
   const handleSelectCar = useCallback((car: ApiCar) => {
     setSelectedCar(car)
     setPlateDropOpen(false)
-    setEditingModel(false)
     setEditingCar(false)
     setForm({
       twoDigits: String(car.plate_first),
@@ -170,21 +159,14 @@ export function AddCarDialog({ onSuccess }: { onSuccess?: () => void } = {}) {
       mileage: String(car.last_mileage ?? ""),
       note: "",
     })
-    // پر کردن فرم ادیت مدل با اطلاعات مدل فعلی ماشین
+    // مدل فعلی ماشین را فقط برای نمایش تنظیم کن
     setSelectedModel(car.model ?? null)
     if (car.model) {
       setModelSearch(
         `${car.model.make ?? ""} ${car.model.model} ${car.model.model_year ?? ""}`.trim(),
       )
-      setEditModelForm({
-        make: car.model.make ?? "",
-        model: car.model.model,
-        model_year: car.model.model_year != null ? String(car.model.model_year) : "",
-        transmission_type: (car.model.transmission_type as "man" | "auto") ?? "man",
-      })
     } else {
       setModelSearch("")
-      setEditModelForm(emptyModel)
     }
   }, [])
 
@@ -207,15 +189,12 @@ export function AddCarDialog({ onSuccess }: { onSuccess?: () => void } = {}) {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
       streamRef.current = stream
-      // ابتدا camActive را true می‌کنیم تا المنت <video> رندر شود
-      // سپس در useEffect زیر، stream به آن اختصاص بده
       setCamActive(true)
     } catch {
       alert("دسترسی به دوربین امکان‌پذیر نیست. پلاک را دستی وارد کنید.")
     }
   }
 
-  // وقتی camActive true شد و المنت <video> در DOM رندر شد، stream را به آن اختصاص بده
   useEffect(() => {
     if (camActive && streamRef.current && videoRef.current) {
       videoRef.current.srcObject = streamRef.current
@@ -223,9 +202,7 @@ export function AddCarDialog({ onSuccess }: { onSuccess?: () => void } = {}) {
     }
   }, [camActive])
 
-  // Clean extracted OCR text to match Iranian plate pattern
   const cleanPlateText = (raw: string): string => {
-    // Persian/Arabic character mapping to Farsi digits
     const charMap: Record<string, string> = {
       "٠": "0", "١": "1", "٢": "2", "٣": "3", "٤": "4",
       "۰": "0", "۱": "1", "۲": "2", "۳": "3", "۴": "4",
@@ -233,14 +210,10 @@ export function AddCarDialog({ onSuccess }: { onSuccess?: () => void } = {}) {
       "ۚ": "", "ۛ": "", "۝": "",
     };
 
-    // Normalize characters
     let cleaned = raw.toUpperCase();
     for (const [k, v] of Object.entries(charMap)) cleaned = cleaned.replaceAll(k, v);
 
-    // Remove non-alphanumeric and non-Farsi chars (keep Persian letters and digits)
     const persianPlateLetters = "ابپتثجچحخدذرزژسشصضطظعغفقکگلمنوهی";
-
-    // Extract segments: two groups of digits, possibly separated by a Persian letter + separator
     const digits = cleaned.replace(/[^0-9۰-۹]/g, "").replace(/[۰-۹]/g, (m) => charMap[m] || m);
     const letters = cleaned.replace(/[^A-Z\u0600-\u06FF]/g, "");
 
@@ -254,15 +227,12 @@ export function AddCarDialog({ onSuccess }: { onSuccess?: () => void } = {}) {
     setOcrError("")
 
     try {
-      // گرفتن عکس از دوربین
       const frame = captureFrame(videoRef.current)
       setCapturedImage(frame)
 
-      // OCR روی عکس
       const result = await ocrLicensePlate(videoRef.current)
 
       if (result.success) {
-        // فقط وقتی موفق بود فرم رو پر کن
         set("twoDigits", result.plate.twoDigits)
         set("letter", result.plate.letter)
         set("threeDigits", result.plate.threeDigits)
@@ -270,12 +240,10 @@ export function AddCarDialog({ onSuccess }: { onSuccess?: () => void } = {}) {
         setOcrError("")
         toast.success("پلاک با موفقیت خوانده شد")
       } else {
-        // خطا نشون بده — فرم رو پر نکن
         setOcrError(result.message || "مشکل در خواندن پلاک")
         toast.error(result.message || "مشکل در خواندن پلاک")
       }
 
-      // بستن دوربین بعد از گرفتن عکس
       stopCamera()
     } catch (error) {
       console.error("خطا در OCR:", error)
@@ -287,7 +255,6 @@ export function AddCarDialog({ onSuccess }: { onSuccess?: () => void } = {}) {
     }
   }
 
-
   // ------------------- ریست -------------------
   const reset = () => {
     setForm(emptyForm)
@@ -296,8 +263,6 @@ export function AddCarDialog({ onSuccess }: { onSuccess?: () => void } = {}) {
     setIsNewModel(false)
     setModelSearch("")
     setNewModelForm(emptyModel)
-    setEditModelForm(emptyModel)
-    setEditingModel(false)
     setEditingCar(false)
     setVisitDescription("")
     setPlateDropOpen(false)
@@ -315,99 +280,51 @@ export function AddCarDialog({ onSuccess }: { onSuccess?: () => void } = {}) {
 
   const modelValid = selectedModel !== null || (isNewModel && newModelForm.make.trim() && newModelForm.model.trim() && newModelForm.model_year)
 
-  // ------------------- آپدیت مدل (PATCH) -------------------
-  const handleUpdateModel = async () => {
-    if (!selectedModel) return
-    setSubmitting(true)
-    setSubmitError("")
-    try {
-      const updated = await updateModel(selectedModel.id, {
-        make: editModelForm.make,
-        model: editModelForm.model,
-        model_year: Number(editModelForm.model_year),
-        transmission_type: editModelForm.transmission_type,
-      })
-      setSelectedModel(updated)
-      setModelSearch(`${updated.make ?? ""} ${updated.model} ${updated.model_year ?? ""}`.trim())
-      setEditingModel(false)
-    } catch (e: unknown) {
-      setSubmitError(e instanceof Error ? e.message : "خطا در به‌روزرسانی مدل")
-    } finally {
-      setSubmitting(false)
-    }
-  }
-
-  // ------------------- آپدیت ماشین (PATCH) -------------------
-  const handleUpdateCar = async () => {
-    if (!selectedCar) return
-    setSubmitting(true)
-    setSubmitError("")
-    try {
-      const payload: UpdateCarPayload = {}
-      if (form.year) payload.manufacturing_year = Number(form.year)
-      if (form.mileage) payload.last_mileage = Number(form.mileage)
-      await updateCar(selectedCar.id, payload)
-      setEditingCar(false)
-    } catch (e: unknown) {
-      setSubmitError(e instanceof Error ? e.message : "خطا در به‌روزرسانی خودرو")
-    } finally {
-      setSubmitting(false)
-    }
-  }
+  // حالت ادیت اطلاعات ماشین (فقط برای ماشین جدید)
+  const [editingCar, setEditingCar] = useState(false)
 
   // ------------------- ارسال نهایی -------------------
   const handleSubmit = async () => {
     setSubmitting(true)
     setSubmitError("")
     try {
-      if (selectedCar) {
-        // ── ماشین موجود — فقط ویزیت با carId می‌سازیم ──
-        const payload: CreateVisitWithCarPayload = {
-          car: { id: selectedCar.id } as any, // فقط ID
-          description: visitDescription || form.note || null,
-          status: "queued",
-        }
-        await createVisitWithCar(payload)
-      } else {
-        // ── ماشین جدید — ویزیت + car + model یکجا ──
+      const payload: CreateVisitWithCarPayload = selectedCar
+        ? {
+            // ── ماشین موجود ──
+            car: { id: selectedCar.id },
+            status: "queued",
+            description: visitDescription || null,
+          }
+        : {
+            // ── ماشین جدید ──
+            car: {
+              model: isNewModel || !selectedModel
+                ? {
+                    // مدل جدید — اطلاعات کامل با id: null
+                    id: null,
+                    make: newModelForm.make,
+                    model: newModelForm.model,
+                    model_year: newModelForm.model_year ? Number(newModelForm.model_year) : null,
+                    transmission_type: newModelForm.transmission_type,
+                  }
+                : { id: selectedModel!.id }, // مدل موجود — فقط ID
+              manufacturing_year: form.year ? Number(form.year) : null,
+              in_garage: true,
+              last_mileage: form.mileage ? Number(form.mileage) : null,
+              plate_first: Number(form.twoDigits),
+              plate_letter: form.letter,
+              plate_second: Number(form.threeDigits),
+              plate_region: Number(form.region),
+            } as any,
+            status: "queued",
+            description: visitDescription || form.note || null,
+          }
 
-        // تعیین model payload
-        const modelPayload =
-          isNewModel || !selectedModel
-            ? {
-                // مدل جدید — اطلاعات کامل
-                id: undefined as any, // backend با null/undefined می‌فهمه جدیده
-                make: newModelForm.make,
-                model: newModelForm.model,
-                model_year: Number(newModelForm.model_year) || null,
-                transmission_type: newModelForm.transmission_type,
-              }
-            : { id: selectedModel.id } // مدل موجود — فقط ID
-
-        const payload: CreateVisitWithCarPayload = {
-          service_orders: [],
-          car: {
-            // owner رو حذف کردیم — بک برای ماشین جدید مالک میخواد
-            model: modelPayload as any,
-            manufacturing_year: form.year ? Number(form.year) : null,
-            in_garage: true,
-            last_mileage: form.mileage ? Number(form.mileage) : null,
-            plate_first: Number(form.twoDigits),
-            plate_letter: form.letter,
-            plate_second: Number(form.threeDigits),
-            plate_region: Number(form.region),
-          },
-          status: "queued",
-          description: visitDescription || form.note || null,
-        }
-
-        await createVisitWithCar(payload)
-      }
-
+      await createVisitWithCar(payload)
       toast.success("خودرو با موفقیت به گاراژ اضافه شد")
       reset()
       setOpen(false)
-      onSuccess?.()
+      onSuccessAction?.()
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "خطایی رخ داد"
       setSubmitError(msg)
@@ -570,145 +487,66 @@ export function AddCarDialog({ onSuccess }: { onSuccess?: () => void } = {}) {
           {step === "info" && (
             <>
               {selectedCar ? (
-                /* ========== ماشین موجود ========== */
+                /* ========== ماشین موجود — فقط نمایش ========== */
                 <div className="space-y-4">
                   {/* --- بخش مدل --- */}
                   <div className="rounded-xl border border-border bg-card p-4 space-y-3">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-semibold">مدل خودرو</span>
-                      {!editingModel && (
-                        <Button
-                          variant="outline" size="sm"
-                          onClick={() => {
-                            setEditingModel(true)
-                            setEditModelForm({
-                              make: selectedModel?.make ?? "",
-                              model: selectedModel?.model ?? "",
-                              model_year: String(selectedModel?.model_year ?? ""),
-                              transmission_type: (selectedModel?.transmission_type as "man" | "auto") ?? "man",
-                            })
-                          }}
-                        >
-                          ادیت مدل
-                        </Button>
-                      )}
-                    </div>
-
-                    {editingModel ? (
-                      <div className="space-y-3">
-                        <div className="grid grid-cols-2 gap-3">
-                          <div className="space-y-1.5">
-                            <Label>سازنده</Label>
-                            <Input value={editModelForm.make} onChange={(e) => setEm("make", e.target.value)} />
-                          </div>
-                          <div className="space-y-1.5">
-                            <Label>مدل</Label>
-                            <Input value={editModelForm.model} onChange={(e) => setEm("model", e.target.value)} />
-                          </div>
-                          <div className="space-y-1.5">
-                            <Label>سال مدل</Label>
-                            <Input inputMode="numeric" value={editModelForm.model_year} onChange={(e) => setEm("model_year", e.target.value.replace(/\D/g, ""))} />
-                          </div>
-                          <div className="space-y-1.5">
-                            <Label>گیربکس</Label>
-                            <Select value={editModelForm.transmission_type} onValueChange={(v) => setEm("transmission_type", v ?? "man")}>
-                              <SelectTrigger><SelectValue /></SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="man">دنده‌ای</SelectItem>
-                                <SelectItem value="auto">اتوماتیک</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </div>
-                        </div>
-                        <div className="flex gap-2 justify-end">
-                          <Button variant="outline" size="sm" onClick={() => setEditingModel(false)}>انصراف</Button>
-                          <Button size="sm" onClick={handleUpdateModel} disabled={submitting}>
-                            {submitting ? <Loader2 className="size-4 animate-spin" /> : "آپدیت مدل"}
-                          </Button>
-                        </div>
-                      </div>
-                    ) : (
+                    <span className="text-sm font-semibold">مدل خودرو</span>
+                    {selectedModel ? (
                       <div className="grid grid-cols-2 gap-x-6 gap-y-1.5 text-sm">
                         <div className="flex gap-2">
                           <span className="text-muted-foreground">سازنده:</span>
-                          <span className="font-medium">{selectedModel?.make}</span>
+                          <span className="font-medium">{selectedModel.make}</span>
                         </div>
                         <div className="flex gap-2">
                           <span className="text-muted-foreground">مدل:</span>
-                          <span className="font-medium">{selectedModel?.model}</span>
+                          <span className="font-medium">{selectedModel.model}</span>
                         </div>
                         <div className="flex gap-2">
                           <span className="text-muted-foreground">سال:</span>
-                          <span className="font-medium">{selectedModel?.model_year}</span>
+                          <span className="font-medium">{selectedModel.model_year}</span>
                         </div>
                         <div className="flex gap-2">
                           <span className="text-muted-foreground">گیربکس:</span>
-                          <span className="font-medium">{selectedModel?.transmission_type === "man" ? "دنده‌ای" : "اتوماتیک"}</span>
+                          <span className="font-medium">{selectedModel.transmission_type === "man" ? "دنده‌ای" : "اتوماتیک"}</span>
                         </div>
                       </div>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">مدل نامشخص</p>
                     )}
                   </div>
 
                   {/* --- بخش اطلاعات ماشین --- */}
                   <div className="rounded-xl border border-border bg-card p-4 space-y-3">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-semibold">اطلاعات خودرو</span>
-                      {!editingCar && (
-                        <Button variant="outline" size="sm" onClick={() => setEditingCar(true)}>
-                          ادیت خودرو
-                        </Button>
+                    <span className="text-sm font-semibold">اطلاعات خودرو</span>
+                    <div className="grid grid-cols-2 gap-x-6 gap-y-1.5 text-sm">
+                      {selectedCar.owner?.profile?.first_name && (
+                        <div className="flex gap-2">
+                          <span className="text-muted-foreground">نام:</span>
+                          <span className="font-medium">
+                            {selectedCar.owner.profile.first_name} {selectedCar.owner.profile.last_name}
+                          </span>
+                        </div>
                       )}
+                      <div className="flex gap-2">
+                        <span className="text-muted-foreground">تلفن:</span>
+                        <span className="font-medium">{toFa(selectedCar.owner?.phone ?? "—")}</span>
+                      </div>
+                      {selectedCar.owner?.profile?.email && (
+                        <div className="flex gap-2 col-span-2">
+                          <span className="text-muted-foreground">ایمیل:</span>
+                          <span className="font-medium">{selectedCar.owner.profile.email}</span>
+                        </div>
+                      )}
+                      <div className="flex gap-2">
+                        <span className="text-muted-foreground">کارکرد:</span>
+                        <span className="font-medium">{toFa(String(selectedCar.last_mileage))} کیلومتر</span>
+                      </div>
+                      <div className="flex gap-2">
+                        <span className="text-muted-foreground">سال ساخت:</span>
+                        <span className="font-medium">{toFa(String(selectedCar.manufacturing_year))}</span>
+                      </div>
                     </div>
-
-                    {editingCar ? (
-                      <div className="space-y-3">
-                        <div className="grid grid-cols-2 gap-3">
-                          <div className="space-y-1.5">
-                            <Label>سال ساخت</Label>
-                            <Input inputMode="numeric" value={form.year} onChange={(e) => set("year", e.target.value.replace(/\D/g, ""))} placeholder="۱۴۰۰" />
-                          </div>
-                          <div className="space-y-1.5">
-                            <Label>کارکرد (کیلومتر)</Label>
-                            <Input inputMode="numeric" value={form.mileage} onChange={(e) => set("mileage", e.target.value.replace(/\D/g, ""))} placeholder="۵۰۰۰۰" />
-                          </div>
-                        </div>
-                        <div className="flex gap-2 justify-end">
-                          <Button variant="outline" size="sm" onClick={() => setEditingCar(false)}>انصراف</Button>
-                          <Button size="sm" onClick={handleUpdateCar} disabled={submitting}>
-                            {submitting ? <Loader2 className="size-4 animate-spin" /> : "آپدیت خودرو"}
-                          </Button>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="grid grid-cols-2 gap-x-6 gap-y-1.5 text-sm">
-                        {selectedCar.owner?.profile?.first_name && (
-                          <div className="flex gap-2">
-                            <span className="text-muted-foreground">نام:</span>
-                            <span className="font-medium">
-                              {selectedCar.owner.profile.first_name} {selectedCar.owner.profile.last_name}
-                            </span>
-                          </div>
-                        )}
-                        <div className="flex gap-2">
-                          <span className="text-muted-foreground">تلفن:</span>
-                          <span className="font-medium">{toFa(selectedCar.owner?.phone ?? "—")}</span>
-                        </div>
-                        {selectedCar.owner?.profile?.email && (
-                          <div className="flex gap-2 col-span-2">
-                            <span className="text-muted-foreground">ایمیل:</span>
-                            <span className="font-medium">{selectedCar.owner.profile.email}</span>
-                          </div>
-                        )}
-                        <div className="flex gap-2">
-                          <span className="text-muted-foreground">کارکرد:</span>
-                          <span className="font-medium">{toFa(String(selectedCar.last_mileage))} کیلومتر</span>
-                        </div>
-                        <div className="flex gap-2">
-                          <span className="text-muted-foreground">سال ساخت:</span>
-                          <span className="font-medium">{toFa(String(selectedCar.manufacturing_year))}</span>
-                        </div>
-                      </div>
-                    )}
                   </div>
 
                   {/* --- توضیحات ویزیت --- */}
@@ -902,7 +740,7 @@ export function AddCarDialog({ onSuccess }: { onSuccess?: () => void } = {}) {
           {/* ماشین جدید */}
           {step === "info" && !selectedCar && (
             <Button onClick={handleSubmit} disabled={submitting || !modelValid} className="gap-2 font-semibold">
-              {submitting ? <><Loader2 className="size-4 animate-spin" /> در حال ذخیره...</> : <><Plus className="size-4" /> ثبت خودروی دید</>}
+              {submitting ? <><Loader2 className="size-4 animate-spin" /> در حال ذخیره...</> : <><Plus className="size-4" /> ثبت خودروی جدید</>}
             </Button>
           )}
         </DialogFooter>
