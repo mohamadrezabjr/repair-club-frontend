@@ -81,6 +81,45 @@ export async function createUser(body: CreateUserPayload): Promise<ApiUser> {
   return data
 }
 
+// ─── Visits ─────────────────────────────────────────────────────────
+
+/** پیلود model برای افزودن ماشین در ویزیت جدید */
+export type VisitCarModelPayload =
+  | { id: number }                     // مدل موجود
+  | ApiCarModel                        // مدل جدید
+
+export interface CreateVisitWithCarPayload {
+  service_orders?: ServiceOrderPayload[]  // سرویس‌ها (اختیاری)
+  car: {
+    owner?: string                        // UUID مالک (اختیاری)
+    model: VisitCarModelPayload
+    manufacturing_year?: number | null
+    in_garage?: boolean
+    last_mileage?: number | null
+    plate_first: number
+    plate_letter: string
+    plate_second: number
+    plate_region: number
+  }
+  status?: "ready" | "queued" | "repairing" | "delivered" | "cancelled"
+  description?: string | null
+}
+
+/**
+ * ساخت ویزیت جدید با ماشین (موجود یا جدید)
+ * POST garage/visits/
+ */
+export async function createVisitWithCar(
+  payload: CreateVisitWithCarPayload,
+): Promise<ApiVisit> {
+  const { data } = await http.post<ApiVisit>("garage/visits/", payload)
+  return data
+}
+
+/**
+ * ساخت ویزیت ساده با carId موجود
+ * @deprecated از createVisitWithCar استفاده کنید
+ */
 export async function createVisit(carId: number, description: string): Promise<unknown> {
   const { data } = await http.post<unknown>("garage/visits/", {
     car: carId,

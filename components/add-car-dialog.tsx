@@ -25,7 +25,7 @@ import {
 import { PLATE_LETTERS, type ApiCar, type ApiCarModel, type ApiUser } from "@/lib/types"
 import { toFa } from "@/lib/format"
 import { LicensePlate } from "@/components/license-plate"
-import { fetchCars, fetchModels, createCar, updateCar, createModel, updateModel, createVisit, fetchUserByPhone, createUser, type CreateCarPayload, type UpdateCarPayload, type CreateUserPayload } from "@/lib/api"
+import { fetchCars, fetchModels, updateCar, updateModel, createVisitWithCar, type UpdateCarPayload, type CreateVisitWithCarPayload } from "@/lib/api"
 import { ocrLicensePlate, captureFrame } from "@/lib/ocr"
 import { AlertCircle } from "lucide-react"
 import { toast } from "sonner"
@@ -53,7 +53,7 @@ const emptyModel = {
   transmission_type: "man" as "man" | "auto",
 }
 
-type Step = "plate" | "owner" | "info"
+type Step = "plate" | "info"
 
 // ------------------- کامپوننت -------------------
 export function AddCarDialog({ onSuccess }: { onSuccess?: () => void } = {}) {
@@ -89,13 +89,6 @@ export function AddCarDialog({ onSuccess }: { onSuccess?: () => void } = {}) {
   const [newModelForm, setNewModelForm] = useState(emptyModel)
   const setNm = (key: keyof typeof emptyModel, value: string) =>
     setNewModelForm((f) => ({ ...f, [key]: value }))
-
-  // جستجو و انتخاب مالک
-  const [selectedOwner, setSelectedOwner] = useState<ApiUser | null>(null)
-  const [ownerSearchPhone, setOwnerSearchPhone] = useState("")
-  const [ownerSearching, setOwnerSearching] = useState(false)
-  const [ownerNotFound, setOwnerNotFound] = useState(false)
-  const [isNewOwner, setIsNewOwner] = useState(false)
 
   // حالت ادیت مدل (وقتی مدل موجود انتخاب شده)
   const [editingModel, setEditingModel] = useState(false)
@@ -309,11 +302,6 @@ export function AddCarDialog({ onSuccess }: { onSuccess?: () => void } = {}) {
     setVisitDescription("")
     setPlateDropOpen(false)
     setModelDropOpen(false)
-    setSelectedOwner(null)
-    setOwnerSearchPhone("")
-    setOwnerSearching(false)
-    setOwnerNotFound(false)
-    setIsNewOwner(false)
     setStep("plate")
     setSubmitError("")
     stopCamera()
@@ -326,33 +314,6 @@ export function AddCarDialog({ onSuccess }: { onSuccess?: () => void } = {}) {
     form.region.length >= 1
 
   const modelValid = selectedModel !== null || (isNewModel && newModelForm.make.trim() && newModelForm.model.trim() && newModelForm.model_year)
-
-  // ------------------- جستجوی مالک -------------------
-  const handleSearchOwner = async () => {
-    if (!ownerSearchPhone.trim()) return
-    setOwnerSearching(true)
-    setOwnerNotFound(false)
-    setSelectedOwner(null)
-    setIsNewOwner(false)
-    try {
-      const found = await fetchUserByPhone(ownerSearchPhone.trim())
-      if (found) {
-        setSelectedOwner(found)
-        setForm((f) => ({
-          ...f,
-          ownerPhone: found.phone,
-          ownerFirstName: found.profile?.first_name ?? "",
-          ownerLastName: found.profile?.last_name ?? "",
-          ownerEmail: found.profile?.email ?? "",
-        }))
-      } else {
-        setOwnerNotFound(true)
-        setForm((f) => ({ ...f, ownerPhone: ownerSearchPhone.trim() }))
-      }
-    } finally {
-      setOwnerSearching(false)
-    }
-  }
 
   // ------------------- آپدیت مدل (PATCH) -------------------
   const handleUpdateModel = async () => {
@@ -399,66 +360,58 @@ export function AddCarDialog({ onSuccess }: { onSuccess?: () => void } = {}) {
     setSubmitting(true)
     setSubmitError("")
     try {
-      let finalCarId: number
-
       if (selectedCar) {
-        // ماشین موجود — فقط visit می‌سازیم
-        finalCarId = selectedCar.id
+        // ── ماشین موجود — فقط ویزیت با carId می‌سازیم ──
+        const payload: CreateVisitWithCarPayload = {
+          car: { id: selectedCar.id } as any, // فقط ID
+          description: visitDescription || form.note || null,
+          status: "queued",
+        }
+        await createVisitWithCar(payload)
       } else {
-        // ماشین جدید
+        // ── ماشین جدید — ویزیت + car + model یکجا ──
 
-        // ۱. تعیین ownerId
-        let ownerId: string | undefined
-        if (selectedOwner) {
-          ownerId = selectedOwner.id
-        } else if (isNewOwner && form.ownerPhone) {
-          const userPayload: CreateUserPayload = {
-            phone: form.ownerPhone,
-            ...(form.ownerFirstName && { first_name: form.ownerFirstName }),
-            ...(form.ownerLastName && { last_name: form.ownerLastName }),
-            ...(form.ownerEmail && { email: form.ownerEmail }),
-          }
-          const newUser = await createUser(userPayload)
-          ownerId = newUser.id
+        // تعیین model payload
+        const modelPayload =
+          isNewModel || !selectedModel
+            ? {
+                // مدل جدید — اطلاعات کامل
+                id: undefined as any, // backend با null/undefined می‌فهمه جدیده
+                make: newModelForm.make,
+                model: newModelForm.model,
+                model_year: Number(newModelForm.model_year) || null,
+                transmission_type: newModelForm.transmission_type,
+              }
+            : { id: selectedModel.id } // مدل موجود — فقط ID
+
+        const payload: CreateVisitWithCarPayload = {
+          service_orders: [],
+          car: {
+            // owner رو حذف کردیم — بک برای ماشین جدید مالک میخواد
+            model: modelPayload as any,
+            manufacturing_year: form.year ? Number(form.year) : null,
+            in_garage: true,
+            last_mileage: form.mileage ? Number(form.mileage) : null,
+            plate_first: Number(form.twoDigits),
+            plate_letter: form.letter,
+            plate_second: Number(form.threeDigits),
+            plate_region: Number(form.region),
+          },
+          status: "queued",
+          description: visitDescription || form.note || null,
         }
 
-        // ۲. تعیین modelId
-        let modelId: number
-        if (isNewModel || !selectedModel) {
-          const createdModel = await createModel({
-            make: newModelForm.make,
-            model: newModelForm.model,
-            model_year: Number(newModelForm.model_year),
-            transmission_type: newModelForm.transmission_type,
-          })
-          modelId = createdModel.id
-        } else {
-          modelId = selectedModel.id
-        }
-
-        // ۳. POST ماشین جدید
-        const carPayload: CreateCarPayload = {
-          model: modelId,
-          plate_first: Number(form.twoDigits),
-          plate_letter: form.letter,
-          plate_second: Number(form.threeDigits),
-          plate_region: Number(form.region),
-          ...(ownerId && { owner: ownerId }),
-          ...(form.year && { manufacturing_year: Number(form.year) }),
-          ...(form.mileage && { last_mileage: Number(form.mileage) }),
-        }
-        const createdCar = await createCar(carPayload)
-        finalCarId = createdCar.id
+        await createVisitWithCar(payload)
       }
 
-      // POST ویزیت
-      await createVisit(finalCarId, visitDescription || form.note || "")
-
+      toast.success("خودرو با موفقیت به گاراژ اضافه شد")
       reset()
       setOpen(false)
       onSuccess?.()
     } catch (e: unknown) {
-      setSubmitError(e instanceof Error ? e.message : "خطایی رخ داد. دوباره تلاش کنید.")
+      const msg = e instanceof Error ? e.message : "خطایی رخ داد"
+      setSubmitError(msg)
+      toast.error(msg)
     } finally {
       setSubmitting(false)
     }
@@ -478,8 +431,6 @@ export function AddCarDialog({ onSuccess }: { onSuccess?: () => void } = {}) {
           <DialogDescription>
             {step === "plate"
               ? "پلاک را با دوربین اسکن یا دستی وارد کنید، سپس از لیست انتخاب کنید یا خودروی جدید ثبت کنید."
-              : step === "owner"
-              ? "شماره مالک را وارد کنید تا جستجو شود، یا مالک جدید ثبت کنید."
               : "اطلاعات خودرو و مدل را تکمیل کنید."}
           </DialogDescription>
         </DialogHeader>
@@ -613,100 +564,6 @@ export function AddCarDialog({ onSuccess }: { onSuccess?: () => void } = {}) {
                 </div>
               )}
             </>
-          )}
-
-          {/* ====== مرحله ۲: مالک ====== */}
-          {step === "owner" && !selectedCar && (
-            <div className="space-y-4">
-              {/* جستجوی شماره */}
-              <div className="space-y-1.5">
-                <Label>شماره تماس مالک</Label>
-                <div className="flex gap-2">
-                  <Input
-                    inputMode="numeric"
-                    value={ownerSearchPhone}
-                    onChange={(e) => {
-                      setOwnerSearchPhone(e.target.value.replace(/\D/g, ""))
-                      setSelectedOwner(null)
-                      setOwnerNotFound(false)
-                      setIsNewOwner(false)
-                    }}
-                    placeholder="۰۹۱۲..."
-                    onKeyDown={(e) => e.key === "Enter" && handleSearchOwner()}
-                  />
-                  <Button variant="secondary" onClick={handleSearchOwner} disabled={ownerSearching || !ownerSearchPhone.trim()}>
-                    {ownerSearching ? <Loader2 className="size-4 animate-spin" /> : <Search className="size-4" />}
-                  </Button>
-                </div>
-              </div>
-
-              {/* یوزر پیدا شد */}
-              {selectedOwner && (
-                <div className="rounded-xl border border-primary/40 bg-primary/10 p-4 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-semibold text-primary">مالک پیدا شد</span>
-                    <button onClick={() => { setSelectedOwner(null); setOwnerNotFound(false) }} className="text-muted-foreground hover:text-destructive">
-                      <X className="size-4" />
-                    </button>
-                  </div>
-                  <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-sm">
-                    {selectedOwner.profile?.first_name && (
-                      <div className="flex gap-2">
-                        <span className="text-muted-foreground">نام:</span>
-                        <span className="font-medium">{selectedOwner.profile.first_name} {selectedOwner.profile.last_name}</span>
-                      </div>
-                    )}
-                    <div className="flex gap-2">
-                      <span className="text-muted-foreground">تلفن:</span>
-                      <span className="font-medium">{toFa(selectedOwner.phone)}</span>
-                    </div>
-                    {selectedOwner.profile?.email && (
-                      <div className="flex gap-2 col-span-2">
-                        <span className="text-muted-foreground">ایمیل:</span>
-                        <span className="font-medium">{selectedOwner.profile.email}</span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {/* یوزر پیدا نشد — فرم ثبت جدید */}
-              {ownerNotFound && (
-                <div className="space-y-3">
-                  <div className="rounded-lg border border-dashed border-border bg-muted/40 px-4 py-3 text-sm text-muted-foreground">
-                    کربری با این شماره یافت نشد. می‌توانید مالک جدید ثبت کنید یا بدون مالک ادامه دهید.
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Button
-                      variant={isNewOwner ? "default" : "outline"}
-                      size="sm"
-                      onClick={() => setIsNewOwner((v) => !v)}
-                    >
-                      <Plus className="size-4 ml-1" />
-                      {isNewOwner ? "انصراف از ثبت مالک جدید" : "ثبت مالک جدید"}
-                    </Button>
-                  </div>
-                  {isNewOwner && (
-                    <div className="rounded-xl border border-dashed border-primary/40 bg-primary/5 p-4 space-y-3">
-                      <div className="grid grid-cols-2 gap-3">
-                        <div className="space-y-1.5">
-                          <Label>نام</Label>
-                          <Input value={form.ownerFirstName} onChange={(e) => set("ownerFirstName", e.target.value)} placeholder="علی" />
-                        </div>
-                        <div className="space-y-1.5">
-                          <Label>نام خانوادگی</Label>
-                          <Input value={form.ownerLastName} onChange={(e) => set("ownerLastName", e.target.value)} placeholder="محمدی" />
-                        </div>
-                        <div className="space-y-1.5 col-span-2">
-                          <Label>ایمیل</Label>
-                          <Input type="email" value={form.ownerEmail} onChange={(e) => set("ownerEmail", e.target.value)} placeholder="ali@gmail.com" />
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
           )}
 
           {/* ====== مرحله ۲: اطلاعات خودرو ====== */}
@@ -1018,32 +875,20 @@ export function AddCarDialog({ onSuccess }: { onSuccess?: () => void } = {}) {
             variant="outline"
             onClick={() => {
               if (step === "plate") setOpen(false)
-              else if (step === "owner") setStep("plate")
-              else setStep(selectedCar ? "plate" : "owner")
+              else setStep("plate")
             }}
           >
             {step === "plate" ? "انصراف" : "مرحله قبل"}
           </Button>
 
-          {/* پلاک → مرحله بعد */}
+          {/* پلاک → مرحله بعد (مستقیم به info) */}
           {step === "plate" && (
             <Button
-              onClick={() => setStep(selectedCar ? "info" : "owner")}
+              onClick={() => setStep("info")}
               disabled={!plateValid}
               className="gap-2 font-semibold"
             >
               ادامه
-            </Button>
-          )}
-
-          {/* مالک → اطلاعات خودرو (فقط برای ماشین جدید) */}
-          {step === "owner" && !selectedCar && (
-            <Button
-              onClick={() => setStep("info")}
-              disabled={!ownerSearchPhone.trim() && !selectedOwner}
-              className="gap-2 font-semibold"
-            >
-              ادامه — اطلاعات خودرو
             </Button>
           )}
 
