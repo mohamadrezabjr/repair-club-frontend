@@ -1,6 +1,7 @@
 "use client"
 
-import { useEffect, useMemo, useRef, useState } from "react"
+import React, { useEffect, useMemo, useRef, useState } from "react"
+import { createPortal } from "react-dom"
 import useSWR from "swr"
 import { ChevronDown, Loader2, Plus, Trash2, Wrench } from "lucide-react"
 import { toast } from "sonner"
@@ -26,7 +27,7 @@ import { cn } from "@/lib/utils"
 import { formatToman } from "@/lib/format"
 import {
   fetchServices,
-  saveServiceOrders,
+  submitVisitOrders,
   updateServiceOrderStatus,
   deleteServiceOrder,
   type ServiceOrderPayload,
@@ -192,34 +193,38 @@ export function ServiceOrdersTab({
   )
 }
 
-// ─── کامپوننت سرچ‌باکس سرویس (Combobox) ────────────────────────────────────
+// ─── سرچ‌باکس سرویس با پشتیبانی از "ایجاد جدید" ─────────────────────────────
 
-interface ServiceComboboxProps {
+interface ServiceSearchProps {
   services: Service[]
-  value: string        // آیدی سرویس انتخاب‌شده به صورت string
-  onChange: (id: string) => void
+  loading: boolean
+  /** عنوانی که کاربر تایپ کرده */
+  query: string
+  onQueryChange: (val: string) => void
+  /** سرویس انتخاب‌شده از لیست موجود (یا null اگر هنوز انتخاب نشده یا حالت جدید است) */
+  selectedService: Service | null
+  onSelectService: (s: Service) => void
+  /** کاربر گزینه "ایجاد سرویس جدید" را زد */
+  onCreateNew: () => void
 }
 
-function ServiceCombobox({ services, value, onChange }: ServiceComboboxProps) {
+function ServiceSearchCombobox({
+  services,
+  loading,
+  query,
+  onQueryChange,
+  selectedService,
+  onSelectService,
+  onCreateNew,
+}: ServiceSearchProps) {
   const [open, setOpen] = useState(false)
-  const [query, setQuery] = useState("")
   const containerRef = useRef<HTMLDivElement>(null)
-
-  const selectedService = services.find((s) => String(s.id) === value) ?? null
-
-  // sync query با value از بیرون (انتخاب یا ریست فرم)
-  // فقط وقتی value از خارج عوض می‌شه اجرا بشه، نه وقتی کاربر داره تایپ می‌کنه
-  useEffect(() => {
-    if (value === "") {
-      setQuery("")
-    } else if (selectedService) {
-      setQuery(selectedService.title)
-    }
-  }, [value, selectedService])
+  const inputRef = useRef<HTMLInputElement>(null)
+  const [dropdownStyle, setDropdownStyle] = useState<React.CSSProperties>({})
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
-    if (!q) return services
+    if (!q) return services.slice(0, 10)
     return services.filter(
       (s) =>
         s.title.toLowerCase().includes(q) ||
@@ -227,77 +232,56 @@ function ServiceCombobox({ services, value, onChange }: ServiceComboboxProps) {
     )
   }, [services, query])
 
-  function handleSelect(service: Service) {
-    onChange(String(service.id))
-    setQuery(service.title)  // بلافاصله نام رو نشون بده
-    setOpen(false)
+  function updateDropdownPosition() {
+    if (!inputRef.current) return
+    const rect = inputRef.current.getBoundingClientRect()
+    setDropdownStyle({
+      position: "fixed",
+      top: rect.bottom + 4,
+      left: rect.left,
+      width: rect.width,
+      zIndex: 9999,
+    })
   }
 
-  function handleInputChange(val: string) {
-    setQuery(val)
-    // فقط وقتی اینپوت کاملاً خالی شد، انتخاب رو هم پاک کن
-    // هرگز در حین تایپ نباید onChange('') صدا زده بشه — این باگ حلقه‌ای ایجاد می‌کنه:
-    // onChange('') → value='' → selectedService=null → useEffect → setQuery('') → query پاک می‌شه!
-    if (val === "") onChange("")
-    setOpen(true)
-  }
-
-  // بستن dropdown با کلیک بیرون + بازگرداندن query به نام سرویس انتخاب‌شده
   useEffect(() => {
     function onClickOutside(e: MouseEvent) {
       if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
         setOpen(false)
-        // اگه کاربر بدون انتخاب کلیک کرد بیرون، query رو به نام سرویس فعلی برگردون
-        const sel = services.find((s) => String(s.id) === value)
-        setQuery(sel?.title ?? "")
       }
     }
     document.addEventListener("mousedown", onClickOutside)
     return () => document.removeEventListener("mousedown", onClickOutside)
-  }, [value, services])
+  }, [])
 
-  return (
-    <div className="relative" ref={containerRef}>
-      {/* اینپوت سرچ */}
-      <div className="relative">
-        <Input
-          value={query}
-          onChange={(e) => handleInputChange(e.target.value)}
-          onFocus={() => setOpen(true)}
-          placeholder="جستجو یا انتخاب سرویس..."
-          className="pl-8"
-        />
-        <ChevronDown
-          className={cn(
-            "pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground transition-transform",
-            open && "rotate-180",
-          )}
-        />
-      </div>
-
-      {/* لیست فیلترشده */}
-      {open && (
-        <div className="absolute z-50 mt-1 w-full max-h-52 overflow-y-auto rounded-lg border border-border bg-popover text-popover-foreground shadow-md">
-          {filtered.length === 0 ? (
-            <div className="px-3 py-3 text-sm text-muted-foreground text-center">
-              موردی یافت نشد
-            </div>
-          ) : (
-            filtered.map((s) => (
+  const dropdownContent = open ? (
+    <div
+      style={dropdownStyle}
+      className="overflow-hidden rounded-lg border border-border bg-popover text-popover-foreground shadow-lg"
+    >
+      {loading ? (
+        <div className="flex items-center justify-center gap-2 py-4 text-sm text-muted-foreground">
+          <Loader2 className="size-4 animate-spin" />
+          در حال بارگذاری...
+        </div>
+      ) : (
+        <ul className="max-h-56 overflow-y-auto">
+          {filtered.map((s) => (
+            <li key={s.id}>
               <button
-                key={s.id}
                 type="button"
                 onMouseDown={(e) => {
-                  e.preventDefault() // جلوگیری از blur اینپوت قبل از کلیک
-                  handleSelect(s)
+                  e.preventDefault()
+                  onSelectService(s)
+                  setOpen(false)
                 }}
                 className={cn(
-                  "flex w-full flex-col items-start gap-0.5 px-3 py-2 text-right transition-colors hover:bg-accent",
-                  String(s.id) === value && "bg-accent",
+                  "flex w-full flex-col items-start gap-0.5 px-3 py-2.5 text-right transition-colors hover:bg-accent",
+                  selectedService?.id === s.id && "bg-accent",
                 )}
               >
                 <span className="font-medium text-sm">{s.title}</span>
-                {(s.base_price != null || s.description) && (
+                {(s.description || s.base_price != null) && (
                   <span className="text-xs text-muted-foreground">
                     {[
                       s.description,
@@ -308,17 +292,63 @@ function ServiceCombobox({ services, value, onChange }: ServiceComboboxProps) {
                   </span>
                 )}
               </button>
-            ))
-          )}
-        </div>
+            </li>
+          ))}
+          <li>
+            <button
+              type="button"
+              onMouseDown={(e) => {
+                e.preventDefault()
+                onCreateNew()
+                setOpen(false)
+              }}
+              className="flex w-full items-center gap-2 border-t border-border px-3 py-2.5 text-right text-sm text-primary transition-colors hover:bg-accent"
+            >
+              <Plus className="size-4 shrink-0" />
+              {query.trim()
+                ? `ثبت سرویس جدید: «${query.trim()}»`
+                : "ثبت سرویس جدید"}
+            </button>
+          </li>
+        </ul>
       )}
+    </div>
+  ) : null
+
+  return (
+    <div className="relative" ref={containerRef}>
+      <div className="relative">
+        <Input
+          ref={inputRef}
+          value={query}
+          onChange={(e) => {
+            onQueryChange(e.target.value)
+            setOpen(true)
+            updateDropdownPosition()
+          }}
+          onFocus={() => {
+            setOpen(true)
+            updateDropdownPosition()
+          }}
+          placeholder="نام سرویس را جستجو کنید..."
+          className="pl-8"
+        />
+        <ChevronDown
+          className={cn(
+            "pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground transition-transform",
+            open && "rotate-180",
+          )}
+        />
+      </div>
+
+      {typeof document !== "undefined" && dropdownContent
+        ? createPortal(dropdownContent, document.body)
+        : null}
     </div>
   )
 }
 
 // ─── دیالوگ افزودن سرویس ────────────────────────────────────────────────────
-
-type AddMode = "existing" | "new"
 
 interface AddServiceOrderDialogProps {
   visitId: number
@@ -327,29 +357,20 @@ interface AddServiceOrderDialogProps {
   onAdded: (allOrders: ServiceOrder[]) => void
 }
 
-// فرم حالت "از سرویس‌های موجود"
-const EMPTY_EXISTING = {
-  serviceId: "",
-  title: "",        // عنوان سفارش (override)
+// فرم مشترک اطلاعات سفارش
+const EMPTY_ORDER_FIELDS = {
+  title: "",
   extraDesc: "",
   price: "",
   status: "pending" as ServiceOrderStatus,
 }
 
-// فرم حالت "سرویس جدید" — همه فیلدهای API
-const EMPTY_NEW = {
-  // ── اطلاعات سرویس پایه ──
+// فرم سرویس جدید
+const EMPTY_NEW_SERVICE = {
   serviceTitle: "",
   serviceDesc: "",
   basePrice: "",
   mileageInterval: "",
-  carModel: "",
-  productsNeeded: "",   // comma-separated IDs: "1,2,3"
-  // ── اطلاعات سفارش ──
-  orderTitle: "",
-  extraDesc: "",
-  price: "",
-  status: "pending" as ServiceOrderStatus,
 }
 
 function AddServiceOrderDialog({
@@ -358,30 +379,67 @@ function AddServiceOrderDialog({
   onOpenChange,
   onAdded,
 }: AddServiceOrderDialogProps) {
-  const [mode, setMode] = useState<AddMode>("existing")
-  const [existingForm, setExistingForm] = useState(EMPTY_EXISTING)
-  const [newForm, setNewForm] = useState(EMPTY_NEW)
+  // جستجو
+  const [query, setQuery] = useState("")
+  const [selectedService, setSelectedService] = useState<Service | null>(null)
+  // حالت: null = هنوز انتخاب نشده، false = موجود انتخاب شد، true = ایجاد جدید
+  const [isCreatingNew, setIsCreatingNew] = useState(false)
+
+  const [orderFields, setOrderFields] = useState(EMPTY_ORDER_FIELDS)
+  const [newServiceForm, setNewServiceForm] = useState(EMPTY_NEW_SERVICE)
   const [submitting, setSubmitting] = useState(false)
 
-  const setE = <K extends keyof typeof EMPTY_EXISTING>(
+  const setO = <K extends keyof typeof EMPTY_ORDER_FIELDS>(
     key: K,
-    val: (typeof EMPTY_EXISTING)[K],
-  ) => setExistingForm((f) => ({ ...f, [key]: val }))
+    val: (typeof EMPTY_ORDER_FIELDS)[K],
+  ) => setOrderFields((f) => ({ ...f, [key]: val }))
 
-  const setN = <K extends keyof typeof EMPTY_NEW>(
+  const setNs = <K extends keyof typeof EMPTY_NEW_SERVICE>(
     key: K,
-    val: (typeof EMPTY_NEW)[K],
-  ) => setNewForm((f) => ({ ...f, [key]: val }))
+    val: (typeof EMPTY_NEW_SERVICE)[K],
+  ) => setNewServiceForm((f) => ({ ...f, [key]: val }))
 
   const { data: services = [], isLoading: servicesLoading } = useSWR<Service[]>(
     open ? "garage/services" : null,
     fetchServices,
   )
 
+  function handleSelectService(s: Service) {
+    setSelectedService(s)
+    setQuery(s.title)
+    setIsCreatingNew(false)
+    // پر کردن پیش‌فرض قیمت از سرویس
+    if (s.base_price != null) {
+      setO("price", String(s.base_price))
+    }
+  }
+
+  function handleCreateNew() {
+    setSelectedService(null)
+    setIsCreatingNew(true)
+    // عنوان تایپ‌شده رو به فرم جدید منتقل می‌کنیم
+    if (query.trim()) {
+      setNewServiceForm((f) => ({ ...f, serviceTitle: query.trim() }))
+    }
+  }
+
+  function handleQueryChange(val: string) {
+    setQuery(val)
+    // اگه کاربر بعد از انتخاب دوباره تایپ کرد، انتخاب رو پاک کن
+    if (selectedService) {
+      setSelectedService(null)
+    }
+    if (isCreatingNew) {
+      setNewServiceForm((f) => ({ ...f, serviceTitle: val }))
+    }
+  }
+
   function reset() {
-    setMode("existing")
-    setExistingForm(EMPTY_EXISTING)
-    setNewForm(EMPTY_NEW)
+    setQuery("")
+    setSelectedService(null)
+    setIsCreatingNew(false)
+    setOrderFields(EMPTY_ORDER_FIELDS)
+    setNewServiceForm(EMPTY_NEW_SERVICE)
   }
 
   function handleClose(o: boolean) {
@@ -392,58 +450,56 @@ function AddServiceOrderDialog({
   async function handleSubmit() {
     let payload: ServiceOrderPayload
 
-    if (mode === "existing") {
-      if (!existingForm.serviceId) {
-        toast.error("لطفاً یک سرویس انتخاب کنید")
-        return
-      }
-      payload = {
-        id: null,
-        service: { id: Number(existingForm.serviceId) },
-        title: existingForm.title.trim() || null,
-        extra_description: existingForm.extraDesc.trim() || null,
-        price: Number(existingForm.price) || 0,
-        status: existingForm.status,
-      }
-    } else {
-      if (!newForm.serviceTitle.trim()) {
+    if (isCreatingNew) {
+      const title = newServiceForm.serviceTitle.trim() || query.trim()
+      if (!title) {
         toast.error("لطفاً عنوان سرویس را وارد کنید")
         return
       }
-      if (!newForm.price.trim()) {
+      if (!orderFields.price.trim()) {
         toast.error("لطفاً قیمت سفارش را وارد کنید")
         return
       }
-
-      // پارس آیدی قطعات (comma-separated)
-      const productsNeeded = newForm.productsNeeded
-        .split(",")
-        .map((s) => Number(s.trim()))
-        .filter((n) => Number.isFinite(n) && n > 0)
-
       payload = {
         id: null,
         service: {
           id: null,
-          title: newForm.serviceTitle.trim(),
-          description: newForm.serviceDesc.trim() || null,
-          base_price: newForm.basePrice ? Number(newForm.basePrice) : null,
-          mileage_interval: newForm.mileageInterval
-            ? Number(newForm.mileageInterval)
+          title,
+          description: newServiceForm.serviceDesc.trim() || null,
+          base_price: newServiceForm.basePrice ? Number(newServiceForm.basePrice) : null,
+          mileage_interval: newServiceForm.mileageInterval
+            ? Number(newServiceForm.mileageInterval)
             : null,
-          car_model: newForm.carModel ? Number(newForm.carModel) : null,
-          products_needed: productsNeeded,
+          car_model: null,
+          products_needed: [],
         },
-        title: newForm.orderTitle.trim() || null,
-        extra_description: newForm.extraDesc.trim() || null,
-        price: Number(newForm.price),
-        status: newForm.status,
+        title: orderFields.title.trim() || null,
+        extra_description: orderFields.extraDesc.trim() || null,
+        price: Number(orderFields.price),
+        status: orderFields.status,
+      }
+    } else {
+      if (!selectedService) {
+        toast.error("لطفاً ی���� سرویس انتخاب کنید یا سرویس جدید بسازید")
+        return
+      }
+      if (!orderFields.price.trim()) {
+        toast.error("لطفاً قیمت سفارش را وارد کنید")
+        return
+      }
+      payload = {
+        id: null,
+        service: { id: selectedService.id },
+        title: orderFields.title.trim() || null,
+        extra_description: orderFields.extraDesc.trim() || null,
+        price: Number(orderFields.price),
+        status: orderFields.status,
       }
     }
 
     setSubmitting(true)
     try {
-      const updatedVisit = await saveServiceOrders(visitId, [payload])
+      const updatedVisit = await submitVisitOrders(visitId, { service_orders: [payload] })
       toast.success("سرویس با موفقیت اضافه شد")
       onAdded(updatedVisit.service_orders)
       reset()
@@ -454,213 +510,123 @@ function AddServiceOrderDialog({
     }
   }
 
+  const showNewServiceForm = isCreatingNew
+  const showOrderFields = selectedService !== null || isCreatingNew
+
   return (
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="flex max-h-[90vh] flex-col gap-0 overflow-hidden p-0 sm:max-w-lg">
-        {/* هدر ثابت */}
         <DialogHeader className="px-6 pt-6 pb-4 text-right shrink-0">
           <DialogTitle>افزودن سرویس به ویزیت</DialogTitle>
         </DialogHeader>
 
-        {/* تاگل حالت */}
-        <div className="px-6 pb-4 shrink-0">
-          <div className="flex gap-1.5 rounded-xl bg-muted p-1">
-            <ModeTab active={mode === "existing"} onClick={() => setMode("existing")}>
-              از سرویس‌های موجود
-            </ModeTab>
-            <ModeTab active={mode === "new"} onClick={() => setMode("new")}>
-              سرویس جدید
-            </ModeTab>
+        <div className="flex-1 overflow-y-auto px-6 pb-2 space-y-4">
+          {/* جستجو / انتخاب سرویس */}
+          <div className="space-y-1.5">
+            <Label>
+              سرویس <span className="text-destructive">*</span>
+            </Label>
+            <ServiceSearchCombobox
+              services={services}
+              loading={servicesLoading}
+              query={query}
+              onQueryChange={handleQueryChange}
+              selectedService={selectedService}
+              onSelectService={handleSelectService}
+              onCreateNew={handleCreateNew}
+            />
+            {selectedService && (
+              <p className="text-xs text-primary">
+                سرویس موجود انتخاب شد: {selectedService.title}
+              </p>
+            )}
+            {isCreatingNew && (
+              <p className="text-xs text-chart-2">
+                سرویس جدید ساخته خواهد شد
+              </p>
+            )}
           </div>
-        </div>
 
-        {/* بدنه اسکرول‌پذیر */}
-        <div className="flex-1 overflow-y-auto px-6 pb-2">
-          {mode === "existing" ? (
-            /* ═══ حالت: انتخاب سرویس موجود ═══ */
-            <div className="space-y-4">
+          {/* فرم اطلاعات سرویس جدید */}
+          {showNewServiceForm && (
+            <div className="rounded-xl border border-dashed border-chart-2/50 bg-chart-2/5 p-4 space-y-3">
+              <p className="text-xs font-semibold text-chart-2">اطلاعات سرویس جدید</p>
               <div className="space-y-1.5">
                 <Label>
-                  سرویس <span className="text-destructive">*</span>
-                </Label>
-                {servicesLoading ? (
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <Loader2 className="size-4 animate-spin" />
-                    در حال بارگذاری...
-                  </div>
-                ) : services.length === 0 ? (
-                  <p className="rounded-lg border border-dashed border-border px-3 py-2 text-sm text-muted-foreground">
-                    هیچ سرویسی تعریف نشده. از حالت «سرویس جدید» استفاده کنید.
-                  </p>
-                ) : (
-                  <ServiceCombobox
-                    services={services}
-                    value={existingForm.serviceId}
-                    onChange={(id) => setE("serviceId", id)}
-                  />
-                )}
-              </div>
-
-              <div className="space-y-1.5">
-                <Label>
-                  عنوان سفارش{" "}
-                  <span className="text-xs text-muted-foreground">
-                    (اختیاری — جایگزین عنوان سرویس)
-                  </span>
+                  عنوان سرویس <span className="text-destructive">*</span>
                 </Label>
                 <Input
-                  value={existingForm.title}
-                  onChange={(e) => setE("title", e.target.value)}
-                  placeholder="مثلاً: تعویض روغن موتور سیلک"
+                  value={newServiceForm.serviceTitle}
+                  onChange={(e) => setNs("serviceTitle", e.target.value)}
+                  placeholder="مثلاً: تعویض تایمینگ"
                 />
               </div>
-
-              <div className="space-y-1.5">
-                <Label>قیمت (تومان)</Label>
-                <Input
-                  inputMode="numeric"
-                  value={existingForm.price}
-                  onChange={(e) => setE("price", e.target.value.replace(/\D/g, ""))}
-                  placeholder="مثلاً: ۵۰۰۰۰۰"
-                />
-              </div>
-
               <div className="space-y-1.5">
                 <Label>
-                  توضیح اضافه{" "}
+                  توضیحات{" "}
                   <span className="text-xs text-muted-foreground">(اختیاری)</span>
                 </Label>
                 <Input
-                  value={existingForm.extraDesc}
-                  onChange={(e) => setE("extraDesc", e.target.value)}
-                  placeholder="توضیحات جزئی..."
+                  value={newServiceForm.serviceDesc}
+                  onChange={(e) => setNs("serviceDesc", e.target.value)}
+                  placeholder="شرح کامل سرویس..."
                 />
               </div>
-
-              <div className="space-y-1.5">
-                <Label>وضعیت</Label>
-                <Select
-                  value={existingForm.status}
-                  onValueChange={(v) =>
-                    v && setE("status", v as ServiceOrderStatus)
-                  }
-                >
-                  <SelectTrigger className="w-full">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {ALL_STATUSES.map((s) => (
-                      <SelectItem key={s} value={s}>
-                        {STATUS_LABEL[s]}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-          ) : (
-            /* ═══ حالت: سرویس جدید — همه فیلدهای API ═══ */
-            <div className="space-y-5">
-              {/* ── بخش ۱: تعریف سرویس پایه ── */}
-              <div className="space-y-3">
-                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  اطلاعات سرویس
-                </p>
-
+              <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
                   <Label>
-                    عنوان سرویس <span className="text-destructive">*</span>
-                  </Label>
-                  <Input
-                    value={newForm.serviceTitle}
-                    onChange={(e) => setN("serviceTitle", e.target.value)}
-                    placeholder="مثلاً: تعویض تایمینگ"
-                  />
-                </div>
-
-                <div className="space-y-1.5">
-                  <Label>
-                    توضیحات سرویس{" "}
-                    <span className="text-xs text-muted-foreground">(اختیاری)</span>
-                  </Label>
-                  <Input
-                    value={newForm.serviceDesc}
-                    onChange={(e) => setN("serviceDesc", e.target.value)}
-                    placeholder="شرح کامل سرویس..."
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1.5">
-                    <Label>
-                      قیمت پایه{" "}
-                      <span className="text-xs text-muted-foreground">(تومان)</span>
-                    </Label>
-                    <Input
-                      inputMode="numeric"
-                      value={newForm.basePrice}
-                      onChange={(e) =>
-                        setN("basePrice", e.target.value.replace(/\D/g, ""))
-                      }
-                      placeholder="۰"
-                    />
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <Label>
-                      بازه کارکرد{" "}
-                      <span className="text-xs text-muted-foreground">(کیلومتر)</span>
-                    </Label>
-                    <Input
-                      inputMode="numeric"
-                      value={newForm.mileageInterval}
-                      onChange={(e) =>
-                        setN("mileageInterval", e.target.value.replace(/\D/g, ""))
-                      }
-                      placeholder="مثلاً: ۵۰۰۰"
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-1.5">
-                  <Label>
-                    آیدی مدل خودرو{" "}
-                    <span className="text-xs text-muted-foreground">(اختیاری)</span>
+                    قیمت پایه{" "}
+                    <span className="text-xs text-muted-foreground">(تومان)</span>
                   </Label>
                   <Input
                     inputMode="numeric"
-                    value={newForm.carModel}
+                    value={newServiceForm.basePrice}
                     onChange={(e) =>
-                      setN("carModel", e.target.value.replace(/\D/g, ""))
+                      setNs("basePrice", e.target.value.replace(/\D/g, ""))
                     }
-                    placeholder="مثلاً: ۳"
-                    dir="ltr"
+                    placeholder="۰"
                   />
                 </div>
-
                 <div className="space-y-1.5">
                   <Label>
-                    قطعات مورد نیاز{" "}
-                    <span className="text-xs text-muted-foreground">
-                      (اختیاری — آیدی‌ها با ویرگول: ۱,۲,۳)
-                    </span>
+                    بازه کارکرد{" "}
+                    <span className="text-xs text-muted-foreground">(کیلومتر)</span>
                   </Label>
                   <Input
-                    value={newForm.productsNeeded}
-                    onChange={(e) => setN("productsNeeded", e.target.value)}
-                    placeholder="1,2,3"
-                    dir="ltr"
+                    inputMode="numeric"
+                    value={newServiceForm.mileageInterval}
+                    onChange={(e) =>
+                      setNs("mileageInterval", e.target.value.replace(/\D/g, ""))
+                    }
+                    placeholder="۵۰۰۰"
                   />
                 </div>
               </div>
+            </div>
+          )}
 
+          {/* فیلدهای سفارش — نمایش فقط بعد از انتخاب یا ایجاد */}
+          {showOrderFields && (
+            <>
               <Separator />
-
-              {/* ── بخش ۲: اطلاعات سفارش ── */}
               <div className="space-y-3">
                 <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                   اطلاعات سفارش
                 </p>
+
+                <div className="space-y-1.5">
+                  <Label>
+                    قیمت (تومان) <span className="text-destructive">*</span>
+                  </Label>
+                  <Input
+                    inputMode="numeric"
+                    value={orderFields.price}
+                    onChange={(e) =>
+                      setO("price", e.target.value.replace(/\D/g, ""))
+                    }
+                    placeholder="مثلاً: ۵۰۰۰۰۰"
+                  />
+                </div>
 
                 <div className="space-y-1.5">
                   <Label>
@@ -670,24 +636,9 @@ function AddServiceOrderDialog({
                     </span>
                   </Label>
                   <Input
-                    value={newForm.orderTitle}
-                    onChange={(e) => setN("orderTitle", e.target.value)}
-                    placeholder="مثلاً: تعویض تایمینگ موتور ۴۰۰۰ کیلومتر"
-                  />
-                </div>
-
-                <div className="space-y-1.5">
-                  <Label>
-                    قیمت سفارش (تومان){" "}
-                    <span className="text-destructive">*</span>
-                  </Label>
-                  <Input
-                    inputMode="numeric"
-                    value={newForm.price}
-                    onChange={(e) =>
-                      setN("price", e.target.value.replace(/\D/g, ""))
-                    }
-                    placeholder="مثلاً: ۲۵۰۰۰۰۰"
+                    value={orderFields.title}
+                    onChange={(e) => setO("title", e.target.value)}
+                    placeholder="مثلاً: تعویض روغن موتور سیلک"
                   />
                 </div>
 
@@ -697,18 +648,18 @@ function AddServiceOrderDialog({
                     <span className="text-xs text-muted-foreground">(اختیاری)</span>
                   </Label>
                   <Input
-                    value={newForm.extraDesc}
-                    onChange={(e) => setN("extraDesc", e.target.value)}
+                    value={orderFields.extraDesc}
+                    onChange={(e) => setO("extraDesc", e.target.value)}
                     placeholder="توضیحات جزئی..."
                   />
                 </div>
 
                 <div className="space-y-1.5">
-                  <Label>وضعیت اولیه</Label>
+                  <Label>وضعیت</Label>
                   <Select
-                    value={newForm.status}
+                    value={orderFields.status}
                     onValueChange={(v) =>
-                      v && setN("status", v as ServiceOrderStatus)
+                      v && setO("status", v as ServiceOrderStatus)
                     }
                   >
                     <SelectTrigger className="w-full">
@@ -724,11 +675,10 @@ function AddServiceOrderDialog({
                   </Select>
                 </div>
               </div>
-            </div>
+            </>
           )}
         </div>
 
-        {/* فوتر ثابت */}
         <DialogFooter className="shrink-0 border-t border-border bg-muted/30 px-6 py-4">
           <Button
             variant="outline"
@@ -737,7 +687,11 @@ function AddServiceOrderDialog({
           >
             انصراف
           </Button>
-          <Button onClick={handleSubmit} disabled={submitting} className="gap-1.5">
+          <Button
+            onClick={handleSubmit}
+            disabled={submitting || (!selectedService && !isCreatingNew)}
+            className="gap-1.5"
+          >
             {submitting ? (
               <>
                 <Loader2 className="size-4 animate-spin" />
@@ -750,32 +704,5 @@ function AddServiceOrderDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
-  )
-}
-
-// ─── کامپوننت کمکی: تاب حالت ────────────────────────────────────────────────
-
-function ModeTab({
-  active,
-  onClick,
-  children,
-}: {
-  active: boolean
-  onClick: () => void
-  children: React.ReactNode
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={cn(
-        "flex-1 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors",
-        active
-          ? "bg-background text-foreground shadow-sm"
-          : "text-muted-foreground hover:text-foreground",
-      )}
-    >
-      {children}
-    </button>
   )
 }

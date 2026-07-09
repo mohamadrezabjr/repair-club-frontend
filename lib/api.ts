@@ -1,4 +1,4 @@
-import type { ApiCar, ApiCarModel, ApiUser, ApiVisit, Service, ServiceOrder, ServiceOrderStatus } from "@/lib/types"
+import type { ApiCar, ApiCarModel, ApiUser, ApiVisit, Product, ProductOrder, ProductType, Service, ServiceOrder, ServiceOrderStatus } from "@/lib/types"
 import { http } from "@/lib/http"
 
 export async function fetchCars(): Promise<ApiCar[]> {
@@ -239,4 +239,82 @@ export async function deleteServiceOrder(
   orderId: number,
 ): Promise<void> {
   await http.delete(`garage/service_orders/${orderId}/`)
+}
+
+// ─── Products & Product Types ────────────────────────────────────────────────
+
+/** دریافت لیست انواع کالا */
+export async function fetchProductTypes(): Promise<ProductType[]> {
+  try {
+    const { data } = await http.get<ProductType[]>("inventory/product_types/")
+    return data
+  } catch {
+    return []
+  }
+}
+
+/** دریافت لیست محصولات */
+export async function fetchProducts(): Promise<Product[]> {
+  try {
+    const { data } = await http.get<Product[]>("inventory/products/")
+    return data
+  } catch {
+    return []
+  }
+}
+
+// ─── Product Orders payload types ────────────────────────────────────────────
+
+/** پایلود product_type در بادی ساخت محصول */
+export type ProductTypePayload =
+  | { id: number }                  // نوع کالای موجود
+  | { id: null; name: string; description?: string | null }  // نوع کالای جدید
+
+/** پایلود product در بادی product_order */
+export type ProductPayload =
+  | { id: number }                  // محصول موجود
+  | {                               // محصول جدید
+      id: null
+      product_type: ProductTypePayload
+      name: string
+      price: number
+      stock?: number
+      description?: string | null
+    }
+
+export interface ProductOrderPayload {
+  product: ProductPayload
+  quantity: number
+}
+
+// ─── Combined orders submit ───────────────────────────────────────────────────
+
+export interface VisitOrdersPayload {
+  service_orders?: ServiceOrderPayload[]
+  product_orders?: ProductOrderPayload[]
+}
+
+/**
+ * ثبت سرویس‌ها و کالاها به صورت هم‌زمان
+ * POST visits/<visit_id>/orders/
+ */
+export async function submitVisitOrders(
+  visitId: number,
+  payload: VisitOrdersPayload,
+): Promise<ApiVisit> {
+  const { data } = await http.post<ApiVisit>(
+    `garage/visits/${visitId}/orders/`,
+    payload,
+  )
+  return data
+}
+
+/**
+ * حذف یک product_order
+ * DELETE inventory/product_orders/<order_id>/
+ */
+export async function deleteProductOrder(
+  orderId: number,
+): Promise<void> {
+  await http.delete(`inventory/product_orders/${orderId}/`)
 }

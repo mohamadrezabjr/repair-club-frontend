@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/sheet"
 import { Badge } from "@/components/ui/badge"
 import { ServiceOrdersTab } from "@/components/service-orders-tab"
+import { ProductOrdersTab } from "@/components/product-orders-tab"
 import type {
   ProductOrder,
   ServiceOrder,
@@ -108,15 +109,19 @@ export function VisitDetailSheet({
   const [localOrders, setLocalOrders] = useState<ServiceOrder[]>(
     visit?.service_orders ?? [],
   )
+  const [localProductOrders, setLocalProductOrders] = useState<ProductOrder[]>(
+    visit?.product_orders ?? [],
+  )
 
-  // وقتی ویزیت از پدر عوض شد، localOrders رو sync کن
+  // وقتی ویزیت از پدر عوض شد، state‌های لوکال رو sync کن
   useEffect(() => {
     setLocalOrders(visit?.service_orders ?? [])
+    setLocalProductOrders(visit?.product_orders ?? [])
   }, [visit])
 
   if (!visit) return null
 
-  const { car, product_orders, status, created_at, description } = visit
+  const { car, status, created_at, description } = visit
 
   const carLabel = carLabelOf(visit)
 
@@ -127,7 +132,7 @@ export function VisitDetailSheet({
     : null
 
   const servicesTotal = localOrders.reduce((sum, s) => sum + s.price, 0)
-  const productsTotal = product_orders.reduce((sum, p) => sum + p.total_price, 0)
+  const productsTotal = localProductOrders.reduce((sum, p) => sum + p.total_price, 0)
 
   function handleOrdersUpdate(updatedOrders: ServiceOrder[]) {
     setLocalOrders(updatedOrders)
@@ -207,7 +212,7 @@ export function VisitDetailSheet({
               </TabsTrigger>
             <TabsTrigger value="products" className="gap-1.5">
               <Package className="size-4" />
-              قطعات و کالا ({toFa(product_orders.length)})
+              قطعات و کالا ({toFa(localProductOrders.length)})
             </TabsTrigger>
           </TabsList>
 
@@ -220,33 +225,16 @@ export function VisitDetailSheet({
             />
           </TabsContent>
 
-          {/* سفارش‌های قطعه */}
+          {/* سفارش‌های قطعه — قابل ویرایش */}
           <TabsContent value="products" className="mt-4">
-            {product_orders.length === 0 ? (
-              <EmptyState text="هنوز قطعه‌ای ثبت نشده است." icon="package" />
-            ) : (
-              <ul className="space-y-2">
-                {product_orders.map((po: ProductOrder) => (
-                  <li
-                    key={po.id}
-                    className="flex items-center gap-3 rounded-lg border border-border bg-card p-3"
-                  >
-                    <Package className="size-4 shrink-0 text-chart-2" />
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate font-medium">
-                        {po.product?.name ?? "کالای ناشناس"}
-                      </p>
-                      <p className="text-sm text-muted-foreground">
-                        {toFa(po.quantity)} عدد
-                      </p>
-                    </div>
-                    <span className="shrink-0 text-sm font-semibold text-foreground">
-                      {formatToman(po.total_price)}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            )}
+            <ProductOrdersTab
+              visitId={visit.id}
+              productOrders={localProductOrders}
+              onUpdate={(updated) => {
+                setLocalProductOrders(updated)
+                onUpdate?.()
+              }}
+            />
           </TabsContent>
         </Tabs>
 

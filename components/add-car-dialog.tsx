@@ -46,6 +46,9 @@ import {
   updateModel,
   type CreateVisitWithCarPayload,
 } from "@/lib/api"
+import { ServiceOrdersTab } from "@/components/service-orders-tab"
+import { ProductOrdersTab } from "@/components/product-orders-tab"
+import type { ServiceOrder, ProductOrder } from "@/lib/types"
 import { ocrLicensePlate, captureFrame } from "@/lib/ocr"
 import { toast } from "sonner"
 
@@ -75,7 +78,7 @@ const emptyOwner = {
   email: "",
 }
 
-type Step = "plate" | "info"
+type Step = "plate" | "info" | "orders"
 
 // ─────────────────── کامپوننت ───────────────────
 
@@ -143,6 +146,11 @@ export function AddCarDialog({ onSuccessAction }: { onSuccessAction?: () => void
   // ── وضعیت submit ──
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState("")
+
+  // ── مرحله سوم: ویزیت ایجادشده و لیست اوردرها ──
+  const [createdVisitId, setCreatedVisitId] = useState<number | null>(null)
+  const [visitServiceOrders, setVisitServiceOrders] = useState<ServiceOrder[]>([])
+  const [visitProductOrders, setVisitProductOrders] = useState<ProductOrder[]>([])
 
   // ── بارگذاری خودروها هنگام باز شدن ──
   useEffect(() => {
@@ -406,6 +414,9 @@ export function AddCarDialog({ onSuccessAction }: { onSuccessAction?: () => void
     setModelDropOpen(false)
     setStep("plate")
     setSubmitError("")
+    setCreatedVisitId(null)
+    setVisitServiceOrders([])
+    setVisitProductOrders([])
     stopCamera()
   }
 
@@ -484,11 +495,12 @@ export function AddCarDialog({ onSuccessAction }: { onSuccessAction?: () => void
             description: visitDescription || form.note || null,
           }
 
-      await createVisitWithCar(payload)
+      const createdVisit = await createVisitWithCar(payload)
       toast.success("خودرو با موفقیت به گاراژ اضافه شد")
-      reset()
-      setOpen(false)
-      onSuccessAction?.()
+      setCreatedVisitId(createdVisit.id)
+      setVisitServiceOrders(createdVisit.service_orders ?? [])
+      setVisitProductOrders(createdVisit.product_orders ?? [])
+      setStep("orders")
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "خطایی رخ داد"
       setSubmitError(msg)
@@ -513,7 +525,9 @@ export function AddCarDialog({ onSuccessAction }: { onSuccessAction?: () => void
           <DialogDescription>
             {step === "plate"
               ? "پلاک را با دوربین اسکن یا دستی وارد کنید، سپس از لیست انتخاب کنید یا خودروی جدید ثبت کنید."
-              : "اطلاعات خودرو، مدل و مالک را تکمیل کنید."}
+              : step === "info"
+              ? "اطلاعات خودرو، مدل و مالک را تکمیل کنید."
+              : "سرویس‌ها و کالاهای این ویزیت را ثبت کنید یا این مرحله را رد کنید."}
           </DialogDescription>
         </DialogHeader>
 
@@ -1336,63 +1350,112 @@ export function AddCarDialog({ onSuccessAction }: { onSuccessAction?: () => void
               )}
             </>
           )}
+
+          {/* ══════════════ مرحله ۳: سرویس‌ها و کالاها ══════════════ */}
+          {step === "orders" && createdVisitId !== null && (
+            <div className="space-y-6">
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <div className="flex size-5 items-center justify-center rounded-full bg-primary text-primary-foreground text-xs font-bold shrink-0">
+                    1
+                  </div>
+                  <p className="text-sm font-semibold">سرویس‌ها</p>
+                </div>
+                <ServiceOrdersTab
+                  visitId={createdVisitId}
+                  serviceOrders={visitServiceOrders}
+                  onUpdate={setVisitServiceOrders}
+                />
+              </div>
+
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <div className="flex size-5 items-center justify-center rounded-full bg-primary text-primary-foreground text-xs font-bold shrink-0">
+                    2
+                  </div>
+                  <p className="text-sm font-semibold">قطعات و کالاها</p>
+                </div>
+                <ProductOrdersTab
+                  visitId={createdVisitId}
+                  productOrders={visitProductOrders}
+                  onUpdate={setVisitProductOrders}
+                />
+              </div>
+            </div>
+          )}
         </div>
 
         <DialogFooter className="gap-2 sm:gap-2">
-          <Button
-            variant="outline"
-            onClick={() => {
-              if (step === "plate") setOpen(false)
-              else setStep("plate")
-            }}
-          >
-            {step === "plate" ? "انصراف" : "مرحله قبل"}
-          </Button>
-
-          {step === "plate" && (
+          {step === "orders" ? (
+            /* مرحله ۳: فقط دکمه اتمام */
             <Button
-              onClick={() => setStep("info")}
-              disabled={!plateValid}
+              onClick={() => {
+                reset()
+                setOpen(false)
+                onSuccessAction?.()
+              }}
               className="gap-2 font-semibold"
             >
-              ادامه
+              <Check className="size-4" /> اتمام و بستن
             </Button>
-          )}
+          ) : (
+            <>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  if (step === "plate") setOpen(false)
+                  else setStep("plate")
+                }}
+              >
+                {step === "plate" ? "انصراف" : "مرحله قبل"}
+              </Button>
 
-          {step === "info" && selectedCar && (
-            <Button
-              onClick={handleSubmit}
-              disabled={submitting}
-              className="gap-2 font-semibold"
-            >
-              {submitting ? (
-                <>
-                  <Loader2 className="size-4 animate-spin" /> در حال ذخیره...
-                </>
-              ) : (
-                <>
-                  <Check className="size-4" /> ثبت ورود به گاراژ
-                </>
+              {step === "plate" && (
+                <Button
+                  onClick={() => setStep("info")}
+                  disabled={!plateValid}
+                  className="gap-2 font-semibold"
+                >
+                  ادامه
+                </Button>
               )}
-            </Button>
-          )}
 
-          {step === "info" && !selectedCar && (
-            <Button
-              onClick={handleSubmit}
-              disabled={submitting || !modelValid}
-              className="gap-2 font-semibold"
-            >
-              {submitting ? (
-                <>
-                  <Loader2 className="size-4 animate-spin" /> در حال ذخیره...
-                </>
-              ) : (
-                <>
-                  <Plus className="size-4" /> ثبت خودروی جدید
-                </>
+              {step === "info" && selectedCar && (
+                <Button
+                  onClick={handleSubmit}
+                  disabled={submitting}
+                  className="gap-2 font-semibold"
+                >
+                  {submitting ? (
+                    <>
+                      <Loader2 className="size-4 animate-spin" /> در حال ذخیره...
+                    </>
+                  ) : (
+                    <>
+                      <Check className="size-4" /> ثبت ورود به گاراژ
+                    </>
+                  )}
+                </Button>
               )}
-            </Button>
+
+              {step === "info" && !selectedCar && (
+                <Button
+                  onClick={handleSubmit}
+                  disabled={submitting || !modelValid}
+                  className="gap-2 font-semibold"
+                >
+                  {submitting ? (
+                    <>
+                      <Loader2 className="size-4 animate-spin" /> در حال ذخیره...
+                    </>
+                  ) : (
+                    <>
+                      <Plus className="size-4" /> ثبت خودروی جدید
+                    </>
+                  )}
+                </Button>
+              )}
+            </>
           )}
         </DialogFooter>
       </DialogContent>
