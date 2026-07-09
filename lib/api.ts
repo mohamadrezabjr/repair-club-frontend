@@ -72,7 +72,7 @@ export async function fetchUserByPhone(phone: string): Promise<ApiUser | null> {
 // جستجوی یوزران با بخشی از شماره تلفن (برای اتوکامپلیت)
 export async function searchUsersByPhone(phone: string): Promise<ApiUser[]> {
   try {
-    const { data } = await http.get<ApiUser[]>(`auth/users/search-by-phone/${phone}/`)
+    const { data } = await http.get<ApiUser[]>(`auth/users/search-by-number/${phone}/`)
     return Array.isArray(data) ? data : []
   } catch {
     return []
@@ -199,22 +199,6 @@ export interface ServiceOrderPayload {
 }
 
 /**
- * افزودن/ویرایش سرویس‌های یک ویزیت
- * POST garage/visits/<visit_id>/service_orders/
- * پاسخ: ویزیت به‌روزشده
- */
-export async function saveServiceOrders(
-  visitId: number,
-  serviceOrders: ServiceOrderPayload[],
-): Promise<ApiVisit> {
-  const { data } = await http.post<ApiVisit>(
-    `garage/visits/${visitId}/service_orders/`,
-    { service_orders: serviceOrders },
-  )
-  return data
-}
-
-/**
  * تغییر وضعیت یک سرویس‌اوردر
  * PATCH garage/visits/<visit_id>/service_orders/<order_id>/
  */
@@ -227,6 +211,42 @@ export async function updateServiceOrderStatus(
     `garage/service_orders/${orderId}/`,
     { status },
   )
+  return data
+}
+
+/**
+ * ویرایش یک سرویس‌اوردر
+ * PATCH garage/service_orders/<order_id>/
+ */
+export async function updateServiceOrder(
+  orderId: number,
+  body: Partial<{ title: string | null; price: number; status: ServiceOrderStatus; extra_description: string | null }>,
+): Promise<ServiceOrder> {
+  const { data } = await http.patch<ServiceOrder>(`garage/service_orders/${orderId}/`, body)
+  return data
+}
+
+/**
+ * ویرایش یک product_order
+ * PATCH inventory/product_orders/<order_id>/
+ */
+export async function updateProductOrder(
+  orderId: number,
+  body: Partial<{ quantity: number }>,
+): Promise<ProductOrder> {
+  const { data } = await http.patch<ProductOrder>(`inventory/product_orders/${orderId}/`, body)
+  return data
+}
+
+/**
+ * آپدیت ویزیت (وضعیت یا توضیحات)
+ * PATCH garage/visits/<visit_id>/
+ */
+export async function updateVisit(
+  visitId: number,
+  body: Partial<{ status: string; description: string | null }>,
+): Promise<ApiVisit> {
+  const { data } = await http.patch<ApiVisit>(`garage/visits/${visitId}/`, body)
   return data
 }
 

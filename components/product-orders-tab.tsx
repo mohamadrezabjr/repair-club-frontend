@@ -3,7 +3,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react"
 import { createPortal } from "react-dom"
 import useSWR from "swr"
-import { ChevronDown, Loader2, Package, Plus, Trash2 } from "lucide-react"
+import { ChevronDown, Edit2, Loader2, Package, Plus, Trash2 } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -22,6 +22,7 @@ import {
   fetchProducts,
   fetchProductTypes,
   submitVisitOrders,
+  updateProductOrder,
   deleteProductOrder,
   type ProductOrderPayload,
   type ProductTypePayload,
@@ -42,6 +43,7 @@ export function ProductOrdersTab({
   onUpdate,
 }: ProductOrdersTabProps) {
   const [dialogOpen, setDialogOpen] = useState(false)
+  const [editingOrder, setEditingOrder] = useState<ProductOrder | null>(null)
   const [deletingId, setDeletingId] = useState<number | null>(null)
 
   async function handleDelete(orderId: number) {
@@ -95,10 +97,22 @@ export function ProductOrdersTab({
                     : ""}
                 </p>
               </div>
-              <div className="flex shrink-0 items-center gap-2">
-                <span className="text-sm font-semibold">
-                  {formatToman(po.total_price)}
+              <div className="flex shrink-0 items-center gap-1">
+                <span className="text-sm font-semibold ml-1">
+                  {formatToman(
+                    Number(po.total_price) ||
+                      (po.product ? Number(po.product.price) * po.quantity : 0),
+                  )}
                 </span>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  className="text-muted-foreground hover:text-foreground"
+                  onClick={() => setEditingOrder(po)}
+                  aria-label="ویرایش کالا"
+                >
+                  <Edit2 className="size-3.5" />
+                </Button>
                 <Button
                   variant="ghost"
                   size="icon-sm"
@@ -124,6 +138,18 @@ export function ProductOrdersTab({
         onOpenChange={setDialogOpen}
         onAdded={handleAdded}
       />
+
+      {editingOrder && (
+        <EditProductOrderDialog
+          order={editingOrder}
+          open={!!editingOrder}
+          onOpenChange={(o) => { if (!o) setEditingOrder(null) }}
+          onSaved={(updated) => {
+            onUpdate(productOrders.map((po) => po.id === updated.id ? updated : po))
+            setEditingOrder(null)
+          }}
+        />
+      )}
     </div>
   )
 }
@@ -462,7 +488,7 @@ function AddProductOrderDialog({
   const [selectedType, setSelectedType] = useState<ProductType | null>(null)
   const [isCreatingType, setIsCreatingType] = useState(false)
 
-  // فرم محصول جدید
+  // فر�� محصول جدید
   const [newProductForm, setNewProductForm] = useState(EMPTY_NEW_PRODUCT_FORM)
   // فرم نوع کالا جدید
   const [newTypeForm, setNewTypeForm] = useState(EMPTY_NEW_TYPE_FORM)
@@ -796,7 +822,7 @@ function AddProductOrderDialog({
                   inputMode="numeric"
                   value={quantity}
                   onChange={(e) =>
-                    setQuantity(e.target.value.replace(/\D/g, "") || "1")
+                    setQuantity(e.target.value.replace(/\D/g, ""))
                   }
                   placeholder="۱"
                   dir="ltr"
@@ -845,6 +871,115 @@ function AddProductOrderDialog({
             ) : (
               "افزودن کالا"
             )}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+// ─── دیالوگ ویرایش product_order ────────────────────────────────────────────
+
+interface EditProductOrderDialogProps {
+  order: ProductOrder
+  open: boolean
+  onOpenChange: (o: boolean) => void
+  onSaved: (updated: ProductOrder) => void
+}
+
+function EditProductOrderDialog({
+  order,
+  open,
+  onOpenChange,
+  onSaved,
+}: EditProductOrderDialogProps) {
+  const [quantity, setQuantity] = useState(String(order.quantity))
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    setQuantity(String(order.quantity))
+  }, [order])
+
+  async function handleSave() {
+    const qty = Number(quantity)
+    if (!qty || qty < 1) {
+      toast.error("تعداد باید حداقل ۱ باشد")
+      return
+    }
+    if (
+      order.product?.stock != null &&
+      qty > order.product.stock + order.quantity
+    ) {
+      toast.error(
+        `موجودی کافی نیست. حداکثر ${toFa(order.product.stock + order.quantity)} عدد قابل ثبت است.`,
+      )
+      return
+    }
+    setSaving(true)
+    try {
+      const updated = await updateProductOrder(order.id, { quantity: qty })
+      toast.success("کالا بروز شد")
+      onSaved(updated)
+    } catch {
+      toast.error("خطا در ذخیره تغییرات")
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const productName = order.product?.name ?? "کالا"
+  const unitPrice = order.product ? order.total_price / order.quantity : 0
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-sm" dir="rtl">
+        <DialogHeader className="text-right">
+          <DialogTitle>ویرایش کالا</DialogTitle>
+        </DialogHeader>
+
+        <div className="space-y-4 py-2">
+          <div className="rounded-lg bg-muted/40 px-3 py-2 text-sm font-medium">
+            {productName}
+            {order.product?.product_type && (
+              <span className="mr-1.5 text-xs font-normal text-muted-foreground">
+                ({order.product.product_type.name})
+              </span>
+            )}
+          </div>
+
+          <div className="space-y-1.5">
+            <Label>
+              تعداد <span className="text-destructive">*</span>
+            </Label>
+            <Input
+              inputMode="numeric"
+              value={quantity}
+              onChange={(e) =>
+                setQuantity(e.target.value.replace(/\D/g, ""))
+              }
+              dir="ltr"
+              className="w-32"
+            />
+            {order.product?.stock != null && (
+              <p className="text-xs text-muted-foreground">
+                موجودی انبار: {toFa(order.product.stock + order.quantity)} عدد
+              </p>
+            )}
+            {unitPrice > 0 && Number(quantity) > 0 && (
+              <p className="text-xs text-muted-foreground">
+                جمع: {formatToman(unitPrice * Number(quantity))}
+              </p>
+            )}
+          </div>
+        </div>
+
+        <DialogFooter className="gap-2 sm:gap-2">
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
+            انصراف
+          </Button>
+          <Button onClick={handleSave} disabled={saving} className="gap-1.5">
+            {saving ? <Loader2 className="size-4 animate-spin" /> : null}
+            ذخیره
           </Button>
         </DialogFooter>
       </DialogContent>

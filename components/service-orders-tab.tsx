@@ -3,7 +3,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react"
 import { createPortal } from "react-dom"
 import useSWR from "swr"
-import { ChevronDown, Loader2, Plus, Trash2, Wrench } from "lucide-react"
+import { ChevronDown, Edit2, Loader2, Plus, Trash2, Wrench } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -28,6 +28,7 @@ import { formatToman } from "@/lib/format"
 import {
   fetchServices,
   submitVisitOrders,
+  updateServiceOrder,
   updateServiceOrderStatus,
   deleteServiceOrder,
   type ServiceOrderPayload,
@@ -68,6 +69,7 @@ export function ServiceOrdersTab({
   onUpdate,
 }: ServiceOrdersTabProps) {
   const [dialogOpen, setDialogOpen] = useState(false)
+  const [editingOrder, setEditingOrder] = useState<ServiceOrder | null>(null)
   const [updatingId, setUpdatingId] = useState<number | null>(null)
   const [deletingId, setDeletingId] = useState<number | null>(null)
 
@@ -134,19 +136,30 @@ export function ServiceOrdersTab({
                   )}
                   <p className="mt-1 text-sm text-muted-foreground">{formatToman(so.price)}</p>
                 </div>
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  className="shrink-0 text-muted-foreground hover:text-destructive"
-                  onClick={() => handleDelete(so.id)}
-                  disabled={deletingId === so.id}
-                >
-                  {deletingId === so.id ? (
-                    <Loader2 className="size-3.5 animate-spin" />
-                  ) : (
-                    <Trash2 className="size-3.5" />
-                  )}
-                </Button>
+                <div className="flex items-center gap-1 shrink-0">
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    className="text-muted-foreground hover:text-foreground"
+                    onClick={() => setEditingOrder(so)}
+                    aria-label="ویرایش سرویس"
+                  >
+                    <Edit2 className="size-3.5" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    className="text-muted-foreground hover:text-destructive"
+                    onClick={() => handleDelete(so.id)}
+                    disabled={deletingId === so.id}
+                  >
+                    {deletingId === so.id ? (
+                      <Loader2 className="size-3.5 animate-spin" />
+                    ) : (
+                      <Trash2 className="size-3.5" />
+                    )}
+                  </Button>
+                </div>
               </div>
 
               <div className="flex items-center gap-2">
@@ -189,6 +202,18 @@ export function ServiceOrdersTab({
         onOpenChange={setDialogOpen}
         onAdded={handleAdded}
       />
+
+      {editingOrder && (
+        <EditServiceOrderDialog
+          order={editingOrder}
+          open={!!editingOrder}
+          onOpenChange={(o) => { if (!o) setEditingOrder(null) }}
+          onSaved={(updated) => {
+            onUpdate(serviceOrders.map((so) => so.id === updated.id ? updated : so))
+            setEditingOrder(null)
+          }}
+        />
+      )}
     </div>
   )
 }
@@ -357,7 +382,7 @@ interface AddServiceOrderDialogProps {
   onAdded: (allOrders: ServiceOrder[]) => void
 }
 
-// فرم مشترک اطلاعات سفارش
+// فرم مشترک اطلاعات س��ارش
 const EMPTY_ORDER_FIELDS = {
   title: "",
   extraDesc: "",
@@ -700,6 +725,129 @@ function AddServiceOrderDialog({
             ) : (
               "افزودن سرویس"
             )}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+// ─── دیالوگ ویرایش سرویس‌اوردر ──────────────────────────────────────────────
+
+interface EditServiceOrderDialogProps {
+  order: ServiceOrder
+  open: boolean
+  onOpenChange: (o: boolean) => void
+  onSaved: (updated: ServiceOrder) => void
+}
+
+function EditServiceOrderDialog({
+  order,
+  open,
+  onOpenChange,
+  onSaved,
+}: EditServiceOrderDialogProps) {
+  const [title, setTitle] = useState(order.title ?? "")
+  const [price, setPrice] = useState(String(order.price))
+  const [extraDesc, setExtraDesc] = useState(order.extra_description ?? "")
+  const [status, setStatus] = useState<ServiceOrderStatus>(order.status)
+  const [saving, setSaving] = useState(false)
+
+  // sync اگه order از بیرون عوض شد
+  useEffect(() => {
+    setTitle(order.title ?? "")
+    setPrice(String(order.price))
+    setExtraDesc(order.extra_description ?? "")
+    setStatus(order.status)
+  }, [order])
+
+  async function handleSave() {
+    if (!price.trim() || Number(price) < 0) {
+      toast.error("قیمت باید عدد معتبر باشد")
+      return
+    }
+    setSaving(true)
+    try {
+      const updated = await updateServiceOrder(order.id, {
+        title: title.trim() || null,
+        price: Number(price),
+        extra_description: extraDesc.trim() || null,
+        status,
+      })
+      toast.success("سرویس بروز شد")
+      onSaved(updated)
+    } catch {
+      toast.error("خطا در ذخیره تغییرات")
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md" dir="rtl">
+        <DialogHeader className="text-right">
+          <DialogTitle>ویرایش سرویس</DialogTitle>
+        </DialogHeader>
+
+        <div className="space-y-4 py-2">
+          <div className="space-y-1.5">
+            <Label>
+              قیمت (تومان) <span className="text-destructive">*</span>
+            </Label>
+            <Input
+              inputMode="numeric"
+              value={price}
+              onChange={(e) => setPrice(e.target.value.replace(/\D/g, ""))}
+              dir="ltr"
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <Label>عنوان سفارش <span className="text-xs text-muted-foreground">(اختیاری)</span></Label>
+            <Input
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder={order.service?.title ?? "عنوان سرویس"}
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <Label>توضیح اضافه <span className="text-xs text-muted-foreground">(اختیاری)</span></Label>
+            <Input
+              value={extraDesc}
+              onChange={(e) => setExtraDesc(e.target.value)}
+              placeholder="توضیحات جزئی..."
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <Label>وضعیت</Label>
+            <Select
+              value={status}
+              onValueChange={(v) => v && setStatus(v as ServiceOrderStatus)}
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {ALL_STATUSES.map((s) => (
+                  <SelectItem key={s} value={s}>
+                    {STATUS_LABEL[s]}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+
+        <DialogFooter className="gap-2 sm:gap-2">
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
+            انصراف
+          </Button>
+          <Button onClick={handleSave} disabled={saving} className="gap-1.5">
+            {saving ? <Loader2 className="size-4 animate-spin" /> : null}
+            ذخیره
           </Button>
         </DialogFooter>
       </DialogContent>
