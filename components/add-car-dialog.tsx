@@ -174,17 +174,26 @@ export function AddCarDialog({ onSuccessAction }: { onSuccessAction?: () => void
 
   // ─────────────────── فیلتر پلاک ───────────────────
 
-  const plateQuery = `${form.twoDigits}${form.letter !== "ب" ? form.letter : ""}${form.threeDigits}${form.region}`
-    .replace(/\s/g, "")
-    .toLowerCase()
+  // هر فیلد پلاک را جداگانه مقایسه می‌کنیم تا قاطی نشوند
+  const hasAnyPlateInput =
+    form.twoDigits.trim().length > 0 ||
+    form.letter !== "ب" ||
+    form.threeDigits.trim().length > 0 ||
+    form.region.trim().length > 0
 
-  const filteredCars =
-    plateQuery.length < 1
-      ? []
-      : allCars.filter((c) => {
-          const combined = `${c.plate_first}${c.plate_letter}${c.plate_second}${c.plate_region}`.toLowerCase()
-          return combined.includes(plateQuery)
-        })
+  const filteredCars = !hasAnyPlateInput
+    ? []
+    : allCars.filter((c) => {
+        if (form.twoDigits.trim() && !String(c.plate_first).startsWith(form.twoDigits.trim()))
+          return false
+        if (form.letter !== "ب" && c.plate_letter !== form.letter)
+          return false
+        if (form.threeDigits.trim() && !String(c.plate_second).startsWith(form.threeDigits.trim()))
+          return false
+        if (form.region.trim() && !String(c.plate_region).startsWith(form.region.trim()))
+          return false
+        return true
+      })
 
   // ─────────────────── فیلتر مدل ───────────────────
 
@@ -1428,7 +1437,7 @@ export function AddCarDialog({ onSuccessAction }: { onSuccessAction?: () => void
                 >
                   {submitting ? (
                     <>
-                      <Loader2 className="size-4 animate-spin" /> در حال ذخیره...
+                      <Loader2 className="size-4 animate-spin" /> در حال ذخ��ره...
                     </>
                   ) : (
                     <>
