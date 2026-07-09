@@ -175,10 +175,7 @@ export function AddCarDialog({ onSuccessAction }: { onSuccessAction?: () => void
       ? []
       : allCars.filter((c) => {
           const combined = `${c.plate_first}${c.plate_letter}${c.plate_second}${c.plate_region}`.toLowerCase()
-          return (
-            c.plate_number.toLowerCase().includes(plateQuery) ||
-            combined.includes(plateQuery)
-          )
+          return combined.includes(plateQuery)
         })
 
   // ─────────────────── فیلتر مدل ───────────────────
@@ -662,8 +659,16 @@ export function AddCarDialog({ onSuccessAction }: { onSuccessAction?: () => void
                                     ` · کارکرد: ${toFa(String(car.last_mileage))} کیلومتر`}
                                 </div>
                               </div>
-                              <div className="shrink-0 rounded bg-muted px-2 py-1 font-mono text-xs text-foreground">
-                                {car.plate_number}
+                              <div className="shrink-0">
+                                <LicensePlate
+                                  plate={{
+                                    twoDigits: String(car.plate_first),
+                                    letter: car.plate_letter,
+                                    threeDigits: String(car.plate_second),
+                                    region: String(car.plate_region),
+                                  }}
+                                  size="sm"
+                                />
                               </div>
                             </div>
                           </button>
@@ -693,9 +698,15 @@ export function AddCarDialog({ onSuccessAction }: { onSuccessAction?: () => void
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className="rounded bg-primary/20 px-2 py-1 font-mono text-xs">
-                      {selectedCar.plate_number}
-                    </span>
+                    <LicensePlate
+                      plate={{
+                        twoDigits: String(selectedCar.plate_first),
+                        letter: selectedCar.plate_letter,
+                        threeDigits: String(selectedCar.plate_second),
+                        region: String(selectedCar.plate_region),
+                      }}
+                      size="sm"
+                    />
                     <button
                       onClick={() => { setSelectedCar(null); setForm(emptyForm) }}
                       className="text-muted-foreground hover:text-destructive"
@@ -791,7 +802,7 @@ export function AddCarDialog({ onSuccessAction }: { onSuccessAction?: () => void
                     ) : (
                       <div className="grid grid-cols-2 gap-3">
                         <div className="space-y-1.5">
-                          <Label>سازنده</Label>
+                          <Label>س��زنده</Label>
                           <Input
                             value={editModelForm.make}
                             onChange={(e) =>

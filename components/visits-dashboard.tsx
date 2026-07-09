@@ -246,9 +246,7 @@ function VisitCard({
           return plate ? (
             <LicensePlate plate={plate} />
           ) : (
-            <span className="font-mono text-sm font-bold tracking-widest">
-              {car?.plate_number ?? "—"}
-            </span>
+            <span className="font-mono text-sm font-bold tracking-widest">—</span>
           );
         })()}
         <Badge className={STATUS_STYLE[status]}>{STATUS_LABEL[status]}</Badge>

@@ -164,7 +164,7 @@ export function VisitDetailSheet({
                   <LicensePlate plate={plate} />
                 </div>
               ) : (
-                <InfoRow label="شماره پلاک" value={car?.plate_number || "—"} />
+                <InfoRow label="شماره پلاک" value="—" />
               )
             })()}
             {car?.model?.model_year != null && (
