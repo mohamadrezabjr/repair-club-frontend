@@ -698,7 +698,7 @@ export function AddCarDialog({ onSuccessAction }: { onSuccessAction?: () => void
                         </li>
                       ))}
                     </ul>
-                  ) : plateQuery.length > 0 ? (
+                  ) : hasAnyPlateInput ? (
                     <div className="px-4 py-4 text-center text-sm text-muted-foreground">
                       خودرویی با این پلاک در سیستم ثبت نشده — می‌توانید خودروی جدید ثبت کنید.
                     </div>
@@ -1421,7 +1421,21 @@ export function AddCarDialog({ onSuccessAction }: { onSuccessAction?: () => void
 
               {step === "plate" && (
                 <Button
-                  onClick={() => setStep("info")}
+                  onClick={() => {
+                    // اگه کاربر ماشین رو از dropdown انتخاب نکرده، بررسی کن
+                    // آیا پلاک وارد‌شده با یه ماشین موجود exact match داره
+                    if (!selectedCar) {
+                      const matched = allCars.find(
+                        (c) =>
+                          String(c.plate_first) === form.twoDigits.trim() &&
+                          c.plate_letter === form.letter &&
+                          String(c.plate_second) === form.threeDigits.trim() &&
+                          String(c.plate_region) === form.region.trim(),
+                      )
+                      if (matched) handleSelectCar(matched)
+                    }
+                    setStep("info")
+                  }}
                   disabled={!plateValid}
                   className="gap-2 font-semibold"
                 >
