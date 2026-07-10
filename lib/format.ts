@@ -23,3 +23,25 @@ export function timeAgo(ts: number): string {
   const days = Math.floor(hours / 24)
   return `${toFa(days)} روز پیش`
 }
+
+// ---- برچسب‌های فارسی وضعیت‌ها ----
+import type { VisitStatus, ServiceOrderStatus, TransmissionType } from "./types"
+
+export const VISIT_STATUS_LABEL: Record<VisitStatus, string> = {
+  queued: "در نوبت",
+  repairing: "در حال تعمیر",
+  ready: "آماده تحویل",
+  delivered: "تحویل داده شده",
+  cancelled: "لغو شده",
+}
+
+export const SERVICE_ORDER_STATUS_LABEL: Record<ServiceOrderStatus, string> = {
+  pending: "در انتظار",
+  "in-progress": "در حال انجام",
+  done: "انجام شد",
+}
+
+export const TRANSMISSION_TYPE_LABEL: Record<TransmissionType, string> = {
+  man: "دنده‌ای",
+  auto: "اتوماتیک",
+}

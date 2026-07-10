@@ -35,7 +35,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { PLATE_LETTERS, type ApiCar, type ApiCarModel, type ApiUser } from "@/lib/types"
-import { toFa } from "@/lib/format"
+import { toFa, VISIT_STATUS_LABEL, TRANSMISSION_TYPE_LABEL } from "@/lib/format"
 import { LicensePlate } from "@/components/license-plate"
 import {
   fetchCars,
@@ -723,13 +723,6 @@ export function AddCarDialog({ onSuccessAction }: { onSuccessAction?: () => void
               {/* │ کارت هشدار: ماشین در تعمیرگاه حضور دارد │ */}
               {inGarageResult?.in_garage && (() => {
                 const v = inGarageResult.active_visit
-                const STATUS_FA: Record<string, string> = {
-                  queued:    "در نوبت",
-                  repairing: "در حال تعمیر",
-                  ready:     "آماده تحویل",
-                  delivered: "تحویل شده",
-                  cancelled: "لغو شده",
-                }
                 return (
                   <div className="rounded-xl border border-destructive/40 bg-destructive/5 p-4 space-y-3">
                     {/* عنوان هشدار */}
@@ -755,7 +748,7 @@ export function AddCarDialog({ onSuccessAction }: { onSuccessAction?: () => void
                           <span className="text-muted-foreground">ویزیت فعال</span>
                           <span className="rounded-full border px-2 py-0.5 text-xs font-medium
                             bg-primary/10 border-primary/30 text-primary">
-                            {STATUS_FA[v.status] ?? v.status}
+                            {VISIT_STATUS_LABEL[v.status as keyof typeof VISIT_STATUS_LABEL] ?? v.status}
                           </span>
                         </div>
                         {v.car?.model && (
@@ -904,7 +897,7 @@ export function AddCarDialog({ onSuccessAction }: { onSuccessAction?: () => void
                           <div className="flex gap-2">
                             <span className="text-muted-foreground">گیربکس:</span>
                             <span className="font-medium">
-                              {selectedModel.transmission_type === "man" ? "دنده‌ای" : "اتوماتیک"}
+                              {selectedModel.transmission_type ? TRANSMISSION_TYPE_LABEL[selectedModel.transmission_type] : "نامشخص"}
                             </span>
                           </div>
                         </div>
@@ -950,7 +943,7 @@ export function AddCarDialog({ onSuccessAction }: { onSuccessAction?: () => void
                         <div className="space-y-1.5">
                           <Label>گیربکس</Label>
                           <Select
-                            value={editModelForm.transmission_type}
+                            value={TRANSMISSION_TYPE_LABEL[editModelForm.transmission_type]}
                             onValueChange={(v) =>
                               setEditModelForm((f) => ({
                                 ...f,
@@ -959,7 +952,7 @@ export function AddCarDialog({ onSuccessAction }: { onSuccessAction?: () => void
                             }
                           >
                             <SelectTrigger>
-                              <SelectValue />
+                              <SelectValue placeholder={TRANSMISSION_TYPE_LABEL[editModelForm.transmission_type]} />
                             </SelectTrigger>
                             <SelectContent>
                               <SelectItem value="man">دنده‌ای</SelectItem>
@@ -1314,7 +1307,7 @@ export function AddCarDialog({ onSuccessAction }: { onSuccessAction?: () => void
                                     </span>
                                     <span className="mr-2 text-xs text-muted-foreground">
                                       {m.model_year} ·{" "}
-                                      {m.transmission_type === "man" ? "دنده‌ای" : "اتوماتیک"}
+                                      {m.transmission_type ? TRANSMISSION_TYPE_LABEL[m.transmission_type] : "نامشخص"}
                                     </span>
                                   </button>
                                 </li>
@@ -1391,11 +1384,11 @@ export function AddCarDialog({ onSuccessAction }: { onSuccessAction?: () => void
                           <div className="space-y-1.5">
                             <Label>گیربکس</Label>
                             <Select
-                              value={newModelForm.transmission_type}
+                              value={TRANSMISSION_TYPE_LABEL[newModelForm.transmission_type]}
                               onValueChange={(v) => setNm("transmission_type", v ?? "man")}
                             >
                               <SelectTrigger>
-                                <SelectValue />
+                                <SelectValue placeholder={TRANSMISSION_TYPE_LABEL[newModelForm.transmission_type]} />
                               </SelectTrigger>
                               <SelectContent>
                                 <SelectItem value="man">دنده‌ای</SelectItem>

@@ -44,20 +44,14 @@ import type {
   VisitStatus,
 } from "@/lib/types"
 import { carToPlate } from "@/lib/types"
-import { formatToman, toFa } from "@/lib/format"
+import { formatToman, toFa, VISIT_STATUS_LABEL as VISIT_STATUS_LABEL_SHARED, SERVICE_ORDER_STATUS_LABEL as SERVICE_ORDER_STATUS_LABEL_SHARED } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import { LicensePlate } from "@/components/license-plate"
 import { updateVisit } from "@/lib/api"
 import { toast } from "sonner"
 
 // ---- وضعیت‌های ویزیت ----
-const VISIT_STATUS_LABEL: Record<VisitStatus, string> = {
-  queued: "در نوبت",
-  repairing: "در حال تعمیر",
-  ready: "آماده تحویل",
-  delivered: "تحویل داده شده",
-  cancelled: "لغو شده",
-}
+const VISIT_STATUS_LABEL = VISIT_STATUS_LABEL_SHARED
 
 const VISIT_STATUS_STYLE: Record<VisitStatus, string> = {
   queued: "border-muted bg-muted/40 text-muted-foreground",
@@ -76,11 +70,7 @@ const ALL_VISIT_STATUSES: VisitStatus[] = [
 ]
 
 // ---- وضعیت‌های سرویس‌اوردر ----
-const SERVICE_ORDER_STATUS_LABEL: Record<ServiceOrderStatus, string> = {
-  pending: "در انتظار",
-  "in-progress": "در حال انجام",
-  done: "انجام شد",
-}
+const SERVICE_ORDER_STATUS_LABEL = SERVICE_ORDER_STATUS_LABEL_SHARED
 
 // ---- کمک‌ها ----
 function carLabelOf(visit: Visit): string {
@@ -144,7 +134,7 @@ export function VisitDetailSheet({
     setLocalProductOrders(visit?.product_orders ?? [])
     setLocalStatus(visit?.status ?? "queued")
     setEditDescription(visit?.description ?? "")
-    setEditStatus(visit?.status ?? "queued")
+    setEditStatus("queued")
     setEditingInfo(false)
   }, [visit])
 
@@ -267,11 +257,11 @@ export function VisitDetailSheet({
                     وضعیت ویزیت
                   </label>
                   <Select
-                    value={editStatus}
+                    value={VISIT_STATUS_LABEL[editStatus]}
                     onValueChange={(v) => setEditStatus(v as VisitStatus)}
                   >
                     <SelectTrigger className="h-9 bg-background">
-                      <SelectValue />
+                      <SelectValue placeholder={VISIT_STATUS_LABEL[editStatus]} />
                     </SelectTrigger>
                     <SelectContent>
                       {ALL_VISIT_STATUSES.map((s) => (

@@ -24,7 +24,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { cn } from "@/lib/utils"
-import { formatToman } from "@/lib/format"
+import { formatToman, toFa, SERVICE_ORDER_STATUS_LABEL as SERVICE_ORDER_STATUS_LABEL_SHARED } from "@/lib/format"
 import {
   fetchServices,
   submitVisitOrders,
@@ -37,11 +37,7 @@ import type { Service, ServiceOrder, ServiceOrderStatus } from "@/lib/types"
 
 // ─── ثوابت ──────────────────────────────────────────────────────────────────
 
-const STATUS_LABEL: Record<ServiceOrderStatus, string> = {
-  pending: "در انتظار",
-  "in-progress": "در حال انجام",
-  done: "انجام شد",
-}
+const STATUS_LABEL = SERVICE_ORDER_STATUS_LABEL_SHARED
 
 const STATUS_STYLE: Record<ServiceOrderStatus, string> = {
   pending: "border-muted bg-muted/40 text-muted-foreground",
@@ -165,7 +161,7 @@ export function ServiceOrdersTab({
               <div className="flex items-center gap-2">
                 <span className="text-xs text-muted-foreground shrink-0">وضعیت:</span>
                 <Select
-                  value={so.status}
+                  value={STATUS_LABEL[so.status]}
                   onValueChange={(v) =>
                     v && handleStatusChange(so.id, v as ServiceOrderStatus)
                   }
@@ -177,7 +173,7 @@ export function ServiceOrdersTab({
                       STATUS_STYLE[so.status] ?? "border-muted",
                     )}
                   >
-                    <SelectValue />
+                    <SelectValue placeholder={STATUS_LABEL[so.status]} />
                   </SelectTrigger>
                   <SelectContent>
                     {ALL_STATUSES.map((s) => (
@@ -682,7 +678,7 @@ function AddServiceOrderDialog({
                 <div className="space-y-1.5">
                   <Label>وضعیت</Label>
                   <Select
-                    value={orderFields.status}
+                    value={STATUS_LABEL[orderFields.status]}
                     onValueChange={(v) =>
                       v && setO("status", v as ServiceOrderStatus)
                     }
@@ -824,11 +820,11 @@ function EditServiceOrderDialog({
           <div className="space-y-1.5">
             <Label>وضعیت</Label>
             <Select
-              value={status}
+              value={STATUS_LABEL[status]}
               onValueChange={(v) => v && setStatus(v as ServiceOrderStatus)}
             >
               <SelectTrigger className="w-full">
-                <SelectValue />
+                <SelectValue placeholder={STATUS_LABEL[status]} />
               </SelectTrigger>
               <SelectContent>
                 {ALL_STATUSES.map((s) => (
