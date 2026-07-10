@@ -106,7 +106,7 @@ export async function fetchUserByPhone(phone: string): Promise<ApiUser | null> {
 // جستجوی یوزران با بخشی از شماره تلفن (برای اتوکامپلیت)
 export async function searchUsersByPhone(phone: string): Promise<ApiUser[]> {
   try {
-    const { data } = await http.get<ApiUser[]>(`auth/users/search-by-number/${phone}/`)
+    const { data } = await http.get<ApiUser[]>(`auth/users/search-by-phone/${phone}/`)
     return Array.isArray(data) ? data : []
   } catch {
     return []

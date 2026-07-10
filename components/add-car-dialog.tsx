@@ -70,7 +70,6 @@ const emptyForm = {
 const emptyModel = {
   make: "",
   model: "",
-  model_year: "",
   transmission_type: "man" as "man" | "auto",
 }
 
@@ -138,7 +137,6 @@ export function AddCarDialog({ onSuccessAction }: { onSuccessAction?: () => void
   const [editModelForm, setEditModelForm] = useState({
     make: "",
     model: "",
-    model_year: "",
     transmission_type: "man" as "man" | "auto",
   })
   const [editingModelLoading, setEditingModelLoading] = useState(false)
@@ -341,7 +339,6 @@ export function AddCarDialog({ onSuccessAction }: { onSuccessAction?: () => void
       const updated = await updateModel(selectedModel.id, {
         make: editModelForm.make || undefined,
         model: editModelForm.model || undefined,
-        model_year: editModelForm.model_year ? Number(editModelForm.model_year) : undefined,
         transmission_type: editModelForm.transmission_type,
       })
       setSelectedModel(updated)
@@ -447,10 +444,7 @@ export function AddCarDialog({ onSuccessAction }: { onSuccessAction?: () => void
 
   const modelValid =
     selectedModel !== null ||
-    (isNewModel &&
-      newModelForm.make.trim() &&
-      newModelForm.model.trim() &&
-      !!newModelForm.model_year)
+    (isNewModel && !!newModelForm.model.trim())
 
   // ─────────────────── ارسال نهایی ───────────────────
 
@@ -495,11 +489,9 @@ export function AddCarDialog({ onSuccessAction }: { onSuccessAction?: () => void
               model: isNewModel || !selectedModel
                 ? {
                     id: null,
-                    make: newModelForm.make,
+                    make: newModelForm.make || null,
                     model: newModelForm.model,
-                    model_year: newModelForm.model_year
-                      ? Number(newModelForm.model_year)
-                      : null,
+                    model_year: null,
                     transmission_type: newModelForm.transmission_type,
                   }
                 : { id: selectedModel!.id },
@@ -844,7 +836,6 @@ export function AddCarDialog({ onSuccessAction }: { onSuccessAction?: () => void
                             setEditModelForm({
                               make: selectedModel?.make ?? "",
                               model: selectedModel?.model ?? "",
-                              model_year: String(selectedModel?.model_year ?? ""),
                               transmission_type: (selectedModel?.transmission_type as "man" | "auto") ?? "man",
                             })
                             setEditingModel(true)
@@ -907,7 +898,7 @@ export function AddCarDialog({ onSuccessAction }: { onSuccessAction?: () => void
                     ) : (
                       <div className="grid grid-cols-2 gap-3">
                         <div className="space-y-1.5">
-                          <Label>س��زنده</Label>
+                          <Label>سازنده <span className="text-xs text-muted-foreground">(اختیاری)</span></Label>
                           <Input
                             value={editModelForm.make}
                             onChange={(e) =>
@@ -924,20 +915,6 @@ export function AddCarDialog({ onSuccessAction }: { onSuccessAction?: () => void
                               setEditModelForm((f) => ({ ...f, model: e.target.value }))
                             }
                             placeholder="پژو ۴۰۵"
-                          />
-                        </div>
-                        <div className="space-y-1.5">
-                          <Label>سال مدل</Label>
-                          <Input
-                            inputMode="numeric"
-                            value={editModelForm.model_year}
-                            onChange={(e) =>
-                              setEditModelForm((f) => ({
-                                ...f,
-                                model_year: e.target.value.replace(/\D/g, ""),
-                              }))
-                            }
-                            placeholder="۱۳۹۵"
                           />
                         </div>
                         <div className="space-y-1.5">
@@ -1355,7 +1332,7 @@ export function AddCarDialog({ onSuccessAction }: { onSuccessAction?: () => void
                         <p className="text-sm font-semibold text-primary">مشخصات مدل جدید</p>
                         <div className="grid grid-cols-2 gap-3">
                           <div className="space-y-1.5">
-                            <Label>سازنده *</Label>
+                            <Label>سازنده <span className="text-xs text-muted-foreground">(اختیاری)</span></Label>
                             <Input
                               value={newModelForm.make}
                               onChange={(e) => setNm("make", e.target.value)}
@@ -1368,17 +1345,6 @@ export function AddCarDialog({ onSuccessAction }: { onSuccessAction?: () => void
                               value={newModelForm.model}
                               onChange={(e) => setNm("model", e.target.value)}
                               placeholder="پژو ۴۰۵"
-                            />
-                          </div>
-                          <div className="space-y-1.5">
-                            <Label>سال مدل *</Label>
-                            <Input
-                              inputMode="numeric"
-                              value={newModelForm.model_year}
-                              onChange={(e) =>
-                                setNm("model_year", e.target.value.replace(/\D/g, ""))
-                              }
-                              placeholder="۱۳۹۵"
                             />
                           </div>
                           <div className="space-y-1.5">
