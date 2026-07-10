@@ -183,7 +183,8 @@ export function VisitDetailSheet({
     <>
       <Sheet open={open} onOpenChange={onOpenChange}>
         <SheetContent
-          side="left"
+          side="right"
+          dir="rtl"
           className="flex w-full flex-col gap-0 overflow-y-auto p-0 sm:max-w-xl"
         >
           {/* ---- هدر ---- */}
