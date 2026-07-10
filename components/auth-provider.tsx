@@ -53,6 +53,7 @@ interface AuthContextValue {
 const AuthContext = createContext<AuthContextValue | null>(null)
 
 const ACCESS_COOKIE = "access_token"
+const REFRESH_COOKIE = "refresh_token"
 
 // ─── Provider ────────────────────────────────────────────────────────────────
 
@@ -73,7 +74,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       .then((res) => setUser(res.data))
       .catch(() => {
         // Token invalid / expired and refresh also failed → clear cookie
-        Cookies.remove(ACCESS_COOKIE)
       })
       .finally(() => setIsLoading(false))
   }, [])
@@ -84,6 +84,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       payload,
     )
     Cookies.set(ACCESS_COOKIE, data.access, { sameSite: "Lax" })
+    Cookies.set(REFRESH_COOKIE, data.refresh, { sameSite: "Lax" })
+    
     const me = await http.get<AuthUser>("auth/auth_me/")
     setUser(me.data)
   }, [])

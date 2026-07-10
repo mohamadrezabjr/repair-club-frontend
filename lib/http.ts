@@ -14,6 +14,7 @@ import Cookies from "js-cookie"
 const BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:8000/"
 
 const ACCESS_COOKIE = "access_token"
+const REFRESH_COOKIE = "refresh_token"
 
 export const http = axios.create({
   baseURL: BASE_URL,
@@ -54,12 +55,12 @@ http.interceptors.response.use(
     const originalRequest = error.config as AxiosRequestConfig & { _retry?: boolean }
 
     // Only attempt refresh on 401 and only once per request
-    if (error.response?.status !== 401 || originalRequest._retry) {
+    if (![401, 403].includes(error.response?.status) || originalRequest._retry) {
       return Promise.reject(error)
     }
 
     // If the 401 came from the refresh endpoint itself → logout
-    if (originalRequest.url?.includes("auth/refresh")) {
+    if (originalRequest.url?.includes("auth/refresh/")) {
       Cookies.remove(ACCESS_COOKIE)
       if (typeof window !== "undefined") {
         window.location.href = "/login"
@@ -85,7 +86,7 @@ http.interceptors.response.use(
     isRefreshing = true
 
     try {
-      const { data } = await http.post<{ access: string }>("auth/refresh")
+      const { data } = await http.post<{ access: string }>("auth/refresh/", { refresh: Cookies.get(REFRESH_COOKIE)})
       const newToken = data.access
       Cookies.set(ACCESS_COOKIE, newToken, { sameSite: "Lax" })
       http.defaults.headers.common["Authorization"] = `Bearer ${newToken}`
