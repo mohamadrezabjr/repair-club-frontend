@@ -1,6 +1,40 @@
 import type { ApiCar, ApiCarModel, ApiUser, ApiVisit, Product, ProductOrder, ProductType, Service, ServiceOrder, ServiceOrderStatus } from "@/lib/types"
 import { http } from "@/lib/http"
 
+// ─── Is In Garage ──────────────────────────────────────────────────────────
+
+export interface IsInGaragePayload {
+  plate_first: number
+  plate_letter: string
+  plate_second: number
+  plate_region: number
+}
+
+export interface IsInGarageResponse {
+  in_garage: boolean
+  plate_first: number
+  plate_letter: string
+  plate_second: number
+  plate_region: number
+  active_visit: ApiVisit | null
+}
+
+/**
+ * بررسی حضور ماشین در تعمیرگاه بر اساس پلاک
+ * POST garage/cars/is_in_garage
+ */
+export async function checkIsInGarage(
+  payload: IsInGaragePayload,
+): Promise<IsInGarageResponse> {
+  const { data } = await http.post<IsInGarageResponse>(
+    "garage/cars/is_in_garage/",
+    payload,
+  )
+  return data
+}
+
+// ─── Cars ────────────────────────────────────────────────────────────────────
+
 export async function fetchCars(): Promise<ApiCar[]> {
   try {
     const { data } = await http.get<ApiCar[]>("garage/cars/")

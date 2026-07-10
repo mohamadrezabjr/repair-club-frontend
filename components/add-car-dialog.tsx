@@ -41,14 +41,17 @@ import {
   fetchCars,
   fetchModels,
   createVisitWithCar,
+  checkIsInGarage,
   searchUsersByPhone,
   updateCar,
   updateModel,
   type CreateVisitWithCarPayload,
+  type IsInGarageResponse,
 } from "@/lib/api"
 import { ServiceOrdersTab } from "@/components/service-orders-tab"
 import { ProductOrdersTab } from "@/components/product-orders-tab"
-import type { ServiceOrder, ProductOrder } from "@/lib/types"
+import { VisitDetailSheet } from "@/components/visit-detail-sheet"
+import type { ServiceOrder, ProductOrder, Visit } from "@/lib/types"
 import { ocrLicensePlate, captureFrame } from "@/lib/ocr"
 import { toast } from "sonner"
 
@@ -146,6 +149,11 @@ export function AddCarDialog({ onSuccessAction }: { onSuccessAction?: () => void
   // ── وضعیت submit ──
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState("")
+
+  // ── بررسی حضور در گاراژ (is_in_garage) ──
+  const [checkingPlate, setCheckingPlate] = useState(false)
+  const [inGarageResult, setInGarageResult] = useState<IsInGarageResponse | null>(null)
+  const [activeVisitSheetOpen, setActiveVisitSheetOpen] = useState(false)
 
   // ── مرحله سوم: ویزیت ایجادشده و لیست اوردرها ──
   const [createdVisitId, setCreatedVisitId] = useState<number | null>(null)
@@ -423,6 +431,9 @@ export function AddCarDialog({ onSuccessAction }: { onSuccessAction?: () => void
     setModelDropOpen(false)
     setStep("plate")
     setSubmitError("")
+    setCheckingPlate(false)
+    setInGarageResult(null)
+    setActiveVisitSheetOpen(false)
     setCreatedVisitId(null)
     setVisitServiceOrders([])
     setVisitProductOrders([])
@@ -522,6 +533,7 @@ export function AddCarDialog({ onSuccessAction }: { onSuccessAction?: () => void
   // ─────────────────── رندر ───────────────────
 
   return (
+    <>
     <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) reset() }}>
       <DialogTrigger render={<Button size="lg" className="gap-2 font-semibold" />}>
         <Plus className="size-5" />
@@ -626,6 +638,7 @@ export function AddCarDialog({ onSuccessAction }: { onSuccessAction?: () => void
                     set("threeDigits", p.threeDigits)
                     set("region", p.region)
                     setSelectedCar(null)
+                    setInGarageResult(null) // با تغییر پلاک، نتیجه قبلی بی اعتبار می‌شه
                     setPlateDropOpen(true)
                   }}
                 />
@@ -707,6 +720,82 @@ export function AddCarDialog({ onSuccessAction }: { onSuccessAction?: () => void
               )}
 
               {/* نمایش ماشین انتخاب‌شده */}
+              {/* │ کارت هشدار: ماشین در تعمیرگاه حضور دارد │ */}
+              {inGarageResult?.in_garage && (() => {
+                const v = inGarageResult.active_visit
+                const STATUS_FA: Record<string, string> = {
+                  queued:    "در نوبت",
+                  repairing: "در حال تعمیر",
+                  ready:     "آماده تحویل",
+                  delivered: "تحویل شده",
+                  cancelled: "لغو شده",
+                }
+                return (
+                  <div className="rounded-xl border border-destructive/40 bg-destructive/5 p-4 space-y-3">
+                    {/* عنوان هشدار */}
+                    <div className="flex items-center gap-2 text-destructive">
+                      <svg className="size-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <circle cx="12" cy="12" r="10"/>
+                        <line x1="12" y1="8" x2="12" y2="12"/>
+                        <line x1="12" y1="16" x2="12.01" y2="16"/>
+                      </svg>
+                      <span className="text-sm font-semibold">
+                        این ماشین در حال حاضر در تعمیرگاه حضور دارد
+                      </span>
+                    </div>
+
+                    {/* جزئیات ویزیت فعال — کلیک برای باز کردن sheet */}
+                    {v && (
+                      <button
+                        type="button"
+                        onClick={() => setActiveVisitSheetOpen(true)}
+                        className="w-full rounded-lg border border-border bg-card p-3 space-y-2 text-sm text-right transition-colors hover:bg-accent"
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-muted-foreground">ویزیت فعال</span>
+                          <span className="rounded-full border px-2 py-0.5 text-xs font-medium
+                            bg-primary/10 border-primary/30 text-primary">
+                            {STATUS_FA[v.status] ?? v.status}
+                          </span>
+                        </div>
+                        {v.car?.model && (
+                          <div className="flex gap-2">
+                            <span className="text-muted-foreground">خودرو:</span>
+                            <span className="font-medium">
+                              {[v.car.model.make, v.car.model.model].filter(Boolean).join(" ")}
+                              {v.car.model.model_year ? ` — ${v.car.model.model_year}` : ""}
+                            </span>
+                          </div>
+                        )}
+                        {v.description && (
+                          <div className="flex gap-2">
+                            <span className="text-muted-foreground shrink-0">مشکل:</span>
+                            <span className="text-muted-foreground">{v.description}</span>
+                          </div>
+                        )}
+                        {v.service_orders.length > 0 && (
+                          <div className="flex gap-2">
+                            <span className="text-muted-foreground">سرویس‌ها:</span>
+                            <span>{v.service_orders.length} مورد</span>
+                          </div>
+                        )}
+                        <div className="flex gap-2 text-xs text-muted-foreground pt-1 border-t border-border">
+                          <span>ثبت ویزیت:</span>
+                          <span dir="ltr">
+                            {new Intl.DateTimeFormat("fa-IR", {
+                              year: "numeric", month: "long", day: "numeric",
+                            }).format(new Date(v.created_at))}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-end gap-1 pt-1 text-xs text-primary">
+                          کلیک برای مشاهده جزئیات ←
+                        </div>
+                      </button>
+                    )}
+                  </div>
+                )
+              })()}
+
               {selectedCar && (
                 <div className="flex items-center justify-between rounded-xl border border-primary/40 bg-primary/10 px-4 py-3">
                   <div>
@@ -1421,25 +1510,63 @@ export function AddCarDialog({ onSuccessAction }: { onSuccessAction?: () => void
 
               {step === "plate" && (
                 <Button
-                  onClick={() => {
-                    // اگه کاربر ماشین رو از dropdown انتخاب نکرده، بررسی کن
-                    // آیا پلاک وارد‌شده با یه ماشین موجود exact match داره
-                    if (!selectedCar) {
-                      const matched = allCars.find(
-                        (c) =>
-                          String(c.plate_first) === form.twoDigits.trim() &&
-                          c.plate_letter === form.letter &&
-                          String(c.plate_second) === form.threeDigits.trim() &&
-                          String(c.plate_region) === form.region.trim(),
-                      )
-                      if (matched) handleSelectCar(matched)
+                  onClick={async () => {
+                    // پاک کردن نتیجه قبلی در صورت فشار مجدد
+                    setInGarageResult(null)
+
+                    // ارسال ریکوئست بررسی حضور
+                    setCheckingPlate(true)
+                    try {
+                      const result = await checkIsInGarage({
+                        plate_first:  Number(form.twoDigits),
+                        plate_letter: form.letter,
+                        plate_second: Number(form.threeDigits),
+                        plate_region: Number(form.region),
+                      })
+                      setInGarageResult(result)
+
+                      if (result.in_garage) {
+                        // ماشین در گاراژ است — در همین صفحه بمان و کارت نمایش ده
+                        return
+                      }
+
+                      // ماشین در گاراژ نیست — exact match روی لیست لوکال بزنیم
+                      if (!selectedCar) {
+                        const matched = allCars.find(
+                          (c) =>
+                            String(c.plate_first)  === form.twoDigits.trim() &&
+                            c.plate_letter         === form.letter &&
+                            String(c.plate_second) === form.threeDigits.trim() &&
+                            String(c.plate_region) === form.region.trim(),
+                        )
+                        if (matched) handleSelectCar(matched)
+                      }
+                      setStep("info")
+                    } catch {
+                      // اگه ایندپوینت خطا داد، بدون بررسی به مرحله بعد برو
+                      if (!selectedCar) {
+                        const matched = allCars.find(
+                          (c) =>
+                            String(c.plate_first)  === form.twoDigits.trim() &&
+                            c.plate_letter         === form.letter &&
+                            String(c.plate_second) === form.threeDigits.trim() &&
+                            String(c.plate_region) === form.region.trim(),
+                        )
+                        if (matched) handleSelectCar(matched)
+                      }
+                      setStep("info")
+                    } finally {
+                      setCheckingPlate(false)
                     }
-                    setStep("info")
                   }}
-                  disabled={!plateValid}
+                  disabled={!plateValid || checkingPlate}
                   className="gap-2 font-semibold"
                 >
-                  ادامه
+                  {checkingPlate ? (
+                    <><Loader2 className="size-4 animate-spin" /> در حال بررسی...</>
+                  ) : (
+                    "ادامه"
+                  )}
                 </Button>
               )}
 
@@ -1483,5 +1610,13 @@ export function AddCarDialog({ onSuccessAction }: { onSuccessAction?: () => void
         </DialogFooter>
       </DialogContent>
     </Dialog>
+
+    {/* Sheet جزئیات ویزیت فعال — خارج از Dialog تا z-index و focus-trap درست کار کند */}
+    <VisitDetailSheet
+      visit={inGarageResult?.active_visit as Visit | null ?? null}
+      open={activeVisitSheetOpen}
+      onOpenChange={setActiveVisitSheetOpen}
+    />
+    </>
   )
 }
