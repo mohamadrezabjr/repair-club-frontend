@@ -315,7 +315,7 @@ function VisitCard({
 }) {
   const { car, service_orders, status, created_at } = visit;
   const carLabel = car?.model
-    ? [car.model.make, car.model.model].filter(Boolean).join(" ") ||
+    ? [car.model.model].filter(Boolean).join(" ") ||
       "خودروی ناشناس"
     : "خودروی ناشناس";
 
@@ -342,9 +342,9 @@ function VisitCard({
         {/* نام خودرو */}
         <div>
           <h3 className="font-bold leading-tight">{carLabel}</h3>
-          {car?.model?.model_year != null && (
+          {car?.manufacturing_year != null && (
             <p className="mt-0.5 text-sm text-muted-foreground">
-              مدل {toFa(car.model.model_year)}
+              مدل {toFa(car.manufacturing_year)}
             </p>
           )}
         </div>

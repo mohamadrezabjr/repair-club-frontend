@@ -5,5 +5,5 @@ import { redirect } from "next/navigation"
  * Authenticated admins will be redirected to /garage by the login flow.
  */
 export default function RootPage() {
-  redirect("/login")
+  redirect("/garage")
 }

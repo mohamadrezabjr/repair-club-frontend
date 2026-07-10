@@ -6,6 +6,7 @@ import {
   Clock,
   Edit2,
   FileText,
+  Gauge,
   Loader2,
   Package,
   Phone,
@@ -25,6 +26,7 @@ import {
 } from "@/components/ui/sheet"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import {
   Select,
@@ -39,24 +41,26 @@ import { VisitFinishModal } from "@/components/visit-finish-modal"
 import type {
   ProductOrder,
   ServiceOrder,
-  ServiceOrderStatus,
   Visit,
   VisitStatus,
 } from "@/lib/types"
 import { carToPlate } from "@/lib/types"
-import { formatToman, toFa, VISIT_STATUS_LABEL as VISIT_STATUS_LABEL_SHARED, SERVICE_ORDER_STATUS_LABEL as SERVICE_ORDER_STATUS_LABEL_SHARED } from "@/lib/format"
+import {
+  formatToman,
+  toFa,
+  VISIT_STATUS_LABEL,
+  TRANSMISSION_TYPE_LABEL,
+} from "@/lib/format"
 import { cn } from "@/lib/utils"
 import { LicensePlate } from "@/components/license-plate"
-import { updateVisit } from "@/lib/api"
+import { updateVisit, updateCar } from "@/lib/api"
 import { toast } from "sonner"
 
 // ---- وضعیت‌های ویزیت ----
-const VISIT_STATUS_LABEL = VISIT_STATUS_LABEL_SHARED
-
 const VISIT_STATUS_STYLE: Record<VisitStatus, string> = {
-  queued: "border-muted bg-muted/40 text-muted-foreground",
+  queued:    "border-muted bg-muted/40 text-muted-foreground",
   repairing: "border-primary/40 bg-primary/20 text-primary",
-  ready: "border-chart-3/40 bg-chart-3/20 text-chart-3",
+  ready:     "border-chart-3/40 bg-chart-3/20 text-chart-3",
   delivered: "border-chart-2/40 bg-chart-2/20 text-chart-2",
   cancelled: "border-destructive/40 bg-destructive/20 text-destructive",
 }
@@ -68,9 +72,6 @@ const ALL_VISIT_STATUSES: VisitStatus[] = [
   "delivered",
   "cancelled",
 ]
-
-// ---- وضعیت‌های سرویس‌اوردر ----
-const SERVICE_ORDER_STATUS_LABEL = SERVICE_ORDER_STATUS_LABEL_SHARED
 
 // ---- کمک‌ها ----
 function carLabelOf(visit: Visit): string {
@@ -93,7 +94,6 @@ function formatDate(iso: string): string {
   }
 }
 
-// ---- ویزیت‌هایی که دکمه «پایان ویزیت» نشان داده نمی‌شوند ----
 const FINISHED_STATUSES: VisitStatus[] = ["delivered", "cancelled"]
 
 // ---- کامپوننت اصلی ----
@@ -108,22 +108,25 @@ export function VisitDetailSheet({
   onOpenChange: (open: boolean) => void
   onUpdate?: () => void
 }) {
-  // ── سرویس‌اوردرها و محصول‌اوردرهای لوکال ──
-  const [localOrders, setLocalOrders] = useState<ServiceOrder[]>(
-    visit?.service_orders ?? [],
-  )
-  const [localProductOrders, setLocalProductOrders] = useState<ProductOrder[]>(
-    visit?.product_orders ?? [],
-  )
-  const [localStatus, setLocalStatus] = useState<VisitStatus>(
-    visit?.status ?? "queued",
-  )
+  // ── سرویس و محصول اوردرهای لوکال ──
+  const [localOrders, setLocalOrders] = useState<ServiceOrder[]>(visit?.service_orders ?? [])
+  const [localProductOrders, setLocalProductOrders] = useState<ProductOrder[]>(visit?.product_orders ?? [])
+  const [localStatus, setLocalStatus] = useState<VisitStatus>(visit?.status ?? "queued")
 
-  // ── حالت ویرایش اطلاعات پایه ──
+  // ── ویرایش اطلاعات ویزیت (وضعیت + توضیحات) ──
   const [editingInfo, setEditingInfo] = useState(false)
   const [editDescription, setEditDescription] = useState(visit?.description ?? "")
   const [editStatus, setEditStatus] = useState<VisitStatus>(visit?.status ?? "queued")
   const [savingInfo, setSavingInfo] = useState(false)
+
+  // ── ویرایش اطلاعات فنی ماشین ──
+  const [editingCar, setEditingCar] = useState(false)
+  const [editCarForm, setEditCarForm] = useState({
+    manufacturing_year: "",
+    last_mileage: "",
+  })
+  const [localCar, setLocalCar] = useState(visit?.car ?? null)
+  const [savingCar, setSavingCar] = useState(false)
 
   // ── مودال پایان ویزیت ──
   const [finishModalOpen, setFinishModalOpen] = useState(false)
@@ -134,27 +137,30 @@ export function VisitDetailSheet({
     setLocalProductOrders(visit?.product_orders ?? [])
     setLocalStatus(visit?.status ?? "queued")
     setEditDescription(visit?.description ?? "")
-    setEditStatus("queued")
+    setEditStatus(visit?.status ?? "queued")
     setEditingInfo(false)
+    setLocalCar(visit?.car ?? null)
+    setEditingCar(false)
   }, [visit])
 
   if (!visit) return null
 
-  const { car, created_at, description } = visit
+  const { created_at, description } = visit
+  const car = localCar
 
-  const carLabel = carLabelOf(visit)
+  const carLabel = car?.model
+    ? [car.model.make, car.model.model].filter(Boolean).join(" ") || "خودروی ناشناس"
+    : "خودروی ناشناس"
 
   const ownerName = car?.owner?.profile
-    ? [car.owner.profile.first_name, car.owner.profile.last_name]
-        .filter(Boolean)
-        .join(" ")
+    ? [car.owner.profile.first_name, car.owner.profile.last_name].filter(Boolean).join(" ")
     : null
 
   const servicesTotal = localOrders.reduce((sum, s) => sum + s.price, 0)
   const productsTotal = localProductOrders.reduce((sum, p) => sum + p.total_price, 0)
   const isFinished = FINISHED_STATUSES.includes(localStatus)
 
-  // ── ذخیره ویرایش اطلاعات پایه ──
+  // ── ذخیره اطلاعات ویزیت ──
   async function saveInfo() {
     setSavingInfo(true)
     try {
@@ -173,10 +179,43 @@ export function VisitDetailSheet({
     }
   }
 
-  function cancelEdit() {
+  function cancelEditInfo() {
     setEditDescription(description ?? "")
     setEditStatus(localStatus)
     setEditingInfo(false)
+  }
+
+  // ── شروع ویرایش ماشین ──
+  function startEditCar() {
+    setEditCarForm({
+      manufacturing_year: car?.manufacturing_year != null ? String(car.manufacturing_year) : "",
+      last_mileage: car?.last_mileage != null ? String(car.last_mileage) : "",
+    })
+    setEditingCar(true)
+  }
+
+  // ── ذخیره اطلاعات ماشین ──
+  async function saveCar() {
+    if (!car?.id) return
+    setSavingCar(true)
+    try {
+      const updated = await updateCar(car.id, {
+        manufacturing_year: editCarForm.manufacturing_year
+          ? Number(editCarForm.manufacturing_year)
+          : undefined,
+        last_mileage: editCarForm.last_mileage
+          ? Number(editCarForm.last_mileage)
+          : undefined,
+      })
+      setLocalCar((prev) => prev ? { ...prev, ...updated } : prev)
+      setEditingCar(false)
+      toast.success("اطلاعات خودرو بروز شد")
+      onUpdate?.()
+    } catch {
+      toast.error("خطا در ذخیره اطلاعات خودرو")
+    } finally {
+      setSavingCar(false)
+    }
   }
 
   return (
@@ -189,6 +228,8 @@ export function VisitDetailSheet({
         >
           {/* ---- هدر ---- */}
           <SheetHeader className="space-y-3 border-b border-border bg-card p-6 text-right">
+
+            {/* ردیف عنوان + وضعیت */}
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <SheetTitle className="truncate text-xl">{carLabel}</SheetTitle>
@@ -201,8 +242,7 @@ export function VisitDetailSheet({
                 <Badge className={cn("shrink-0", VISIT_STATUS_STYLE[localStatus])}>
                   {VISIT_STATUS_LABEL[localStatus]}
                 </Badge>
-                {/* دکمه ویرایش اطلاعات پایه */}
-                {!editingInfo && (
+                {!editingInfo && !editingCar && (
                   <Button
                     size="icon"
                     variant="ghost"
@@ -216,49 +256,153 @@ export function VisitDetailSheet({
               </div>
             </div>
 
-            {/* اطلاعات پایه خودرو */}
-            <div className="grid grid-cols-2 gap-x-4 gap-y-2 rounded-lg bg-muted/40 p-3 text-sm sm:grid-cols-3">
+            {/* ── کارت اطلاعات ماشین ── */}
+            <div className="rounded-lg border border-border bg-muted/30 p-3 space-y-3">
+              {/* هدر کارت ماشین */}
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                  مشخصات خودرو
+                </span>
+                {!editingCar && !editingInfo && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-7 gap-1.5 text-xs text-muted-foreground hover:text-foreground"
+                    onClick={startEditCar}
+                  >
+                    <Edit2 className="size-3.5" />
+                    ویرایش
+                  </Button>
+                )}
+              </div>
+
+              {/* پلاک */}
               {(() => {
                 const plate = carToPlate(car)
                 return plate ? (
-                  <div className="col-span-2 sm:col-span-3">
-                    <LicensePlate plate={plate} />
-                  </div>
+                  <LicensePlate plate={plate} />
                 ) : (
-                  <InfoRow label="شماره پلاک" value="—" />
+                  <p className="text-xs text-muted-foreground">پلاک ثبت نشده</p>
                 )
               })()}
-              {car?.model?.model_year != null && (
-                <InfoRow label="مدل سال" value={toFa(car.model.model_year)} />
-              )}
-              {car?.last_mileage != null && (
-                <InfoRow label="کارکرد" value={`${toFa(car.last_mileage)} کیلومتر`} />
-              )}
-              {ownerName && (
-                <InfoRow
-                  label="مالک"
-                  value={ownerName}
-                  icon={<UserIcon className="size-3.5" />}
-                />
-              )}
-              {car?.owner?.phone && (
-                <InfoRow
-                  label="تماس"
-                  value={toFa(car.owner.phone)}
-                  icon={<Phone className="size-3.5" />}
-                />
+
+              {!editingCar ? (
+                /* ── نمایش فقط‌خواندنی ── */
+                <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm sm:grid-cols-3">
+                  {car?.model?.make && (
+                    <InfoRow label="سازنده" value={car.model.make} />
+                  )}
+                  {car?.model?.model && (
+                    <InfoRow label="مدل" value={car.model.model} />
+                  )}
+                  {car?.model?.transmission_type && (
+                    <InfoRow
+                      label="گیربکس"
+                      value={TRANSMISSION_TYPE_LABEL[car.model.transmission_type]}
+                    />
+                  )}
+                  {car?.manufacturing_year != null && (
+                    <InfoRow label="سال تولید" value={toFa(car.manufacturing_year)} />
+                  )}
+                  {car?.last_mileage != null && (
+                    <InfoRow
+                      label="کارکرد"
+                      value={`${toFa(car.last_mileage)} کیلومتر`}
+                      icon={<Gauge className="size-3.5" />}
+                    />
+                  )}
+                  {ownerName && (
+                    <InfoRow
+                      label="مالک"
+                      value={ownerName}
+                      icon={<UserIcon className="size-3.5" />}
+                    />
+                  )}
+                  {car?.owner?.phone && (
+                    <InfoRow
+                      label="تماس"
+                      value={toFa(car.owner.phone)}
+                      icon={<Phone className="size-3.5" />}
+                    />
+                  )}
+                </div>
+              ) : (
+                /* ── فرم ویرایش ماشین ── */
+                <div className="space-y-3">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-medium text-muted-foreground">
+                        سال تولید
+                      </label>
+                      <Input
+                        inputMode="numeric"
+                        value={editCarForm.manufacturing_year}
+                        onChange={(e) =>
+                          setEditCarForm((f) => ({
+                            ...f,
+                            manufacturing_year: e.target.value.replace(/\D/g, ""),
+                          }))
+                        }
+                        placeholder="۱۴۰۰"
+                        className="h-9 bg-background text-sm"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-medium text-muted-foreground">
+                        کارکرد (کیلومتر)
+                      </label>
+                      <Input
+                        inputMode="numeric"
+                        value={editCarForm.last_mileage}
+                        onChange={(e) =>
+                          setEditCarForm((f) => ({
+                            ...f,
+                            last_mileage: e.target.value.replace(/\D/g, ""),
+                          }))
+                        }
+                        placeholder="۵۰۰۰۰"
+                        className="h-9 bg-background text-sm"
+                      />
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-end gap-2">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => setEditingCar(false)}
+                      disabled={savingCar}
+                      className="h-8 gap-1.5 text-xs"
+                    >
+                      <X className="size-3.5" />
+                      انصراف
+                    </Button>
+                    <Button
+                      size="sm"
+                      onClick={saveCar}
+                      disabled={savingCar}
+                      className="h-8 gap-1.5 text-xs"
+                    >
+                      {savingCar ? (
+                        <Loader2 className="size-3.5 animate-spin" />
+                      ) : (
+                        <Save className="size-3.5" />
+                      )}
+                      ذخیره
+                    </Button>
+                  </div>
+                </div>
               )}
             </div>
 
-            {/* حالت ویرایش اطلاعات پایه */}
-            {editingInfo ? (
+            {/* ── فرم ویرایش ویزیت ── */}
+            {editingInfo && (
               <div className="space-y-3 rounded-lg border border-primary/30 bg-primary/5 p-3">
                 <div className="space-y-1.5">
                   <label className="text-xs font-medium text-muted-foreground">
                     وضعیت ویزیت
                   </label>
                   <Select
-                    value={VISIT_STATUS_LABEL[editStatus]}
+                    value={editStatus}
                     onValueChange={(v) => setEditStatus(v as VisitStatus)}
                   >
                     <SelectTrigger className="h-9 bg-background">
@@ -288,7 +432,7 @@ export function VisitDetailSheet({
                   <Button
                     size="sm"
                     variant="ghost"
-                    onClick={cancelEdit}
+                    onClick={cancelEditInfo}
                     disabled={savingInfo}
                     className="h-8 gap-1.5 text-xs"
                   >
@@ -310,20 +454,20 @@ export function VisitDetailSheet({
                   </Button>
                 </div>
               </div>
-            ) : (
-              /* توضیحات read-only */
-              (description || editDescription) && (
-                <div className="flex items-start gap-2 rounded-lg border border-border bg-muted/30 p-3 text-sm">
-                  <FileText className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" />
-                  <p className="leading-relaxed text-muted-foreground">
-                    {editDescription || description}
-                  </p>
-                </div>
-              )
+            )}
+
+            {/* توضیحات read-only */}
+            {!editingInfo && (description || editDescription) && (
+              <div className="flex items-start gap-2 rounded-lg border border-border bg-muted/30 p-3 text-sm">
+                <FileText className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" />
+                <p className="leading-relaxed text-muted-foreground">
+                  {editDescription || description}
+                </p>
+              </div>
             )}
 
             {/* دکمه پایان ویزیت */}
-            {!isFinished && (
+            {!isFinished && !editingInfo && !editingCar && (
               <Button
                 onClick={() => setFinishModalOpen(true)}
                 className="w-full gap-2 font-semibold"
@@ -409,7 +553,7 @@ export function VisitDetailSheet({
   )
 }
 
-// ---- کامپوننت‌های کمکی ----
+// ---- کامپوننت کمکی ----
 function InfoRow({
   label,
   value,
