@@ -513,6 +513,7 @@ export function AddCarDialog({ onSuccessAction }: { onSuccessAction?: () => void
       setVisitServiceOrders(createdVisit.service_orders ?? [])
       setVisitProductOrders(createdVisit.product_orders ?? [])
       setStep("orders")
+      onSuccessAction?.()
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "خطایی رخ داد"
       setSubmitError(msg)

@@ -460,14 +460,14 @@ function SortFilterBar({
         </SelectTrigger>
         <SelectContent dir="rtl" align="end">
           {(Object.keys(SORT_LABELS) as SortField[]).map((field) => (
-            <>
+            [
               <SelectItem key={`${field}__desc`} value={`${field}__desc`} className="text-xs">
                 {field === "date" ? `${SORT_LABELS[field]} — جدیدترین` : `${SORT_LABELS[field]} — نزولی`}
-              </SelectItem>
+              </SelectItem>,
               <SelectItem key={`${field}__asc`} value={`${field}__asc`} className="text-xs">
                 {field === "date" ? `${SORT_LABELS[field]} — قدیمی‌ترین` : `${SORT_LABELS[field]} — صعودی`}
-              </SelectItem>
-            </>
+              </SelectItem>,
+            ]
           ))}
         </SelectContent>
       </Select>
