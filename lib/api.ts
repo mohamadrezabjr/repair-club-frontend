@@ -372,3 +372,28 @@ export async function deleteProductOrder(
 ): Promise<void> {
   await http.delete(`inventory/product_orders/${orderId}/`)
 }
+
+// ─── Visit Search ─────────────────────────────────────────────────────────────
+
+export interface VisitSearchParams {
+  plate_first?: string
+  plate_letter?: string
+  plate_second?: string
+  plate_region?: string
+  phone?: string
+  date_from?: string
+  date_to?: string
+}
+
+/**
+ * جستجوی ویزیت‌ها بر اساس پلاک، شماره تلفن مالک، و بازه تاریخ
+ * GET garage/visits/search/?plate_first=...&plate_letter=...&plate_second=...&plate_region=...&phone=...&date_from=...&date_to=...
+ */
+export async function searchVisits(params: VisitSearchParams): Promise<ApiVisit[]> {
+  try {
+    const { data } = await http.get<ApiVisit[]>("garage/visits/search/", { params })
+    return data
+  } catch {
+    return []
+  }
+}

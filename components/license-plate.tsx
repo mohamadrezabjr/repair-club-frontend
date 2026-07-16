@@ -4,7 +4,7 @@ import { toFa } from "@/lib/format"
 import { cn } from "@/lib/utils"
 
 const sizeMap = {
-  sm: { wrap: "h-9 text-sm", ir: "w-7 text-[8px]", gap: "gap-1 px-1.5", input: "w-7 h-full text-sm", select: "w-8 h-full text-sm" },
+  sm: { wrap: "h-8 text-xs", ir: "w-6 text-[7px]", gap: "gap-0.5 px-1", input: "w-6 h-full text-xs", select: "w-7 h-full text-xs" },
   md: { wrap: "h-12 text-lg", ir: "w-9 text-[10px]", gap: "gap-1.5 px-2", input: "w-9 h-full text-lg", select: "w-10 h-full text-lg" },
   lg: { wrap: "h-16 text-2xl", ir: "w-12 text-xs", gap: "gap-2 px-3", input: "w-12 h-full text-2xl", select: "w-14 h-full text-2xl" },
 }
@@ -43,10 +43,12 @@ function PlateSelect({
   value,
   onChange,
   className,
+  allowEmpty = false,
 }: {
   value: string
   onChange: (v: string) => void
   className?: string
+  allowEmpty?: boolean
 }) {
   return (
     <select
@@ -58,6 +60,7 @@ function PlateSelect({
         className,
       )}
     >
+      {allowEmpty && <option value="">—</option>}
       {PLATE_LETTERS.map((l) => (
         <option key={l} value={l}>{l}</option>
       ))}
@@ -71,12 +74,14 @@ export function LicensePlate({
   className,
   editable = false,
   onPlateChange,
+  allowEmptyLetter = false,
 }: {
   plate: Plate
   size?: keyof typeof sizeMap
   className?: string
   editable?: boolean
   onPlateChange?: (plate: Plate) => void
+  allowEmptyLetter?: boolean
 }) {
   const s = sizeMap[size]
 
@@ -111,7 +116,7 @@ export function LicensePlate({
         {editable ? (
           <>
             <PlateInput value={plate.twoDigits} onChange={(v) => set("twoDigits", v)} maxLength={2} placeholder="۱۲" className={s.input} />
-            <PlateSelect value={plate.letter} onChange={(v) => set("letter", v)} className={s.select} />
+            <PlateSelect value={plate.letter} onChange={(v) => set("letter", v)} className={s.select} allowEmpty={allowEmptyLetter} />
             <PlateInput value={plate.threeDigits} onChange={(v) => set("threeDigits", v)} maxLength={3} placeholder="۳۴۵" className={s.input} />
           </>
         ) : (
