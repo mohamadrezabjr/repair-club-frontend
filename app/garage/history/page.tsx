@@ -3,18 +3,25 @@
 import { useState, useEffect, useRef } from "react"
 import useSWR from "swr"
 import Link from "next/link"
-import { useRouter } from "next/navigation"
 import {
   ArrowLeft,
   Clock,
+  Gauge,
   History,
   Loader2,
+  Package,
   Search,
   UserCircle,
+  Users,
   Warehouse,
   Wrench,
   X,
 } from "lucide-react"
+import DatePicker from "react-multi-date-picker"
+import persian from "react-date-object/calendars/persian"
+import persian_fa from "react-date-object/locales/persian_fa"
+import type DateObject from "react-date-object"
+import "react-multi-date-picker/styles/layouts/mobile.css"
 import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -26,8 +33,9 @@ import { LicensePlate } from "@/components/license-plate"
 import { VisitReadonlySheet } from "@/components/visit-readonly-sheet"
 import { useAuth } from "@/components/auth-provider"
 import { searchVisits, type VisitSearchParams } from "@/lib/api"
-import { toFa, VISIT_STATUS_LABEL } from "@/lib/format"
-import type { ServiceOrder, Visit, VisitStatus, Plate } from "@/lib/types"
+import { formatToman, toFa, VISIT_STATUS_LABEL } from "@/lib/format"
+import { formatJalaliDate } from "@/lib/jalali"
+import type { ProductOrder, ServiceOrder, Visit, VisitStatus, Plate } from "@/lib/types"
 import { carToPlate } from "@/lib/types"
 
 const STATUS_STYLE: Record<VisitStatus, string> = {
@@ -36,18 +44,6 @@ const STATUS_STYLE: Record<VisitStatus, string> = {
   ready: "border-chart-3/40 bg-chart-3/20 text-chart-3",
   delivered: "border-chart-2/40 bg-chart-2/20 text-chart-2",
   cancelled: "border-destructive/40 bg-destructive/20 text-destructive",
-}
-
-function formatJalaliDate(iso: string): string {
-  try {
-    return new Intl.DateTimeFormat("fa-IR", {
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-    }).format(new Date(iso))
-  } catch {
-    return iso
-  }
 }
 
 function emptyPlate(): Plate {
@@ -70,13 +66,15 @@ function buildSearchParams(plateObj: Plate, phone: string, dateFrom: string, dat
 }
 
 export default function HistoryPage() {
-  const { user, isLoading: authLoading, logout } = useAuth()
-  const router = useRouter()
+  const { isLoading: authLoading } = useAuth()
 
   const [plateObj, setPlateObj] = useState<Plate>(emptyPlate)
   const [phone, setPhone] = useState("")
-  const [dateFrom, setDateFrom] = useState("")
-  const [dateTo, setDateTo] = useState("")
+  const [dateFrom, setDateFrom] = useState<string>("")
+  const [dateTo, setDateTo] = useState<string>("")
+  // DateObject instances for the DatePicker (persian calendar)
+  const [dateFromObj, setDateFromObj] = useState<DateObject | null>(null)
+  const [dateToObj, setDateToObj] = useState<DateObject | null>(null)
 
   // Debounced search params — after 400ms of no changes, search fires
   const [debouncedParams, setDebouncedParams] = useState<VisitSearchParams | null>(null)
@@ -100,30 +98,27 @@ export default function HistoryPage() {
     setDebouncedParams(buildSearchParams(plateObj, phone, dateFrom, dateTo))
   }
 
+  function handleClear() {
+    setPlateObj(emptyPlate())
+    setPhone("")
+    setDateFrom("")
+    setDateTo("")
+    setDateFromObj(null)
+    setDateToObj(null)
+  }
+
   const hasPlateFilter = plateObj.twoDigits || plateObj.threeDigits || plateObj.region || plateObj.letter !== ""
   const hasAnyFilter = hasPlateFilter || phone.trim() || dateFrom || dateTo
 
   const {
     data: visits = [],
     isLoading,
-    mutate,
   } = useSWR<Visit[]>(
     debouncedParams ? `garage/visits/search?${JSON.stringify(debouncedParams)}` : null,
     () => debouncedParams ? searchVisits(debouncedParams) : Promise.resolve([]),
     { revalidateOnFocus: false },
   )
 
-  function handleClear() {
-    setPlateObj(emptyPlate())
-    setPhone("")
-    setDateFrom("")
-    setDateTo("")
-  }
-
-  function handleLogout() {
-    logout()
-    router.push("/login")
-  }
 
   // Visit detail sheet
   const [selectedVisit, setSelectedVisit] = useState<Visit | null>(null)
@@ -199,33 +194,65 @@ export default function HistoryPage() {
               />
             </div>
 
-            {/* از تاریخ */}
+            {/* از تاریخ - تقویم جلالی */}
             <div className="space-y-1.5">
               <label className="text-sm font-medium text-muted-foreground">
                 از تاریخ
               </label>
-              <Input
-                type="date"
-                value={dateFrom}
-                onChange={(e) => setDateFrom(e.target.value)}
+              <DatePicker
+                calendar={persian}
+                locale={persian_fa}
+                calendarPosition="bottom-right"
+                value={dateFromObj || null}
+                onChange={(val) => {
+                  if (val) {
+                    const d = val as DateObject
+                    const iso = d.toDate().toISOString().split("T")[0]
+                    setDateFrom(iso)
+                    setDateFromObj(val)
+                  } else {
+                    setDateFrom("")
+                    setDateFromObj(null)
+                  }
+                }}
+                format="YYYY/MM/DD"
+                inputClass="flex h-10 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm shadow-xs placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                containerClassName="w-full"
+                placeholder="انتخاب تاریخ"
               />
             </div>
 
-            {/* تا تاریخ */}
+            {/* تا تاریخ - تقویم جلالی */}
             <div className="space-y-1.5">
               <label className="text-sm font-medium text-muted-foreground">
                 تا تاریخ
               </label>
-              <Input
-                type="date"
-                value={dateTo}
-                onChange={(e) => setDateTo(e.target.value)}
+              <DatePicker
+                calendar={persian}
+                locale={persian_fa}
+                calendarPosition="bottom-right"
+                value={dateToObj || null}
+                onChange={(val) => {
+                  if (val) {
+                    const d = val as DateObject
+                    const iso = d.toDate().toISOString().split("T")[0]
+                    setDateTo(iso)
+                    setDateToObj(val)
+                  } else {
+                    setDateTo("")
+                    setDateToObj(null)
+                  }
+                }}
+                format="YYYY/MM/DD"
+                inputClass="flex h-10 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm shadow-xs placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                containerClassName="w-full"
+                placeholder="انتخاب تاریخ"
               />
             </div>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            <Button type="submit" disabled={!hasAnyFilter || isLoading} className="gap-1.5">
+            <Button type="submit" disabled={!hasAnyFilter} className="gap-1.5">
               {isLoading ? (
                 <Loader2 className="size-4 animate-spin" />
               ) : (
@@ -260,7 +287,7 @@ export default function HistoryPage() {
             <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-border py-16 text-center">
               <Search className="size-10 text-muted-foreground/40" />
               <p className="text-sm text-muted-foreground">
-                برای جستجو، یکی از فیلترهای بالا را پر کنید — نتایج به‌صورت خودکار نمایش داده می‌شوند.
+                برای جستجو، یکی از فیلترهای بالا را پر کنید — نتایج به‌صورت ودکار نمایش داده می‌شوند.
               </p>
             </div>
           ) : isLoading ? (
@@ -271,7 +298,7 @@ export default function HistoryPage() {
             <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-border py-16 text-center">
               <Warehouse className="size-10 text-muted-foreground/40" />
               <p className="text-sm text-muted-foreground">
-                هیچ ویزیتی با فیلترهای وارد شده پیدا نشد.
+                هیچ ویزیتی با فیلتهای وارد شده پیدا نشد.
               </p>
             </div>
           ) : (
@@ -301,10 +328,13 @@ function VisitCard({
   visit: Visit
   onSelect: (visit: Visit) => void
 }) {
-  const { car, service_orders, status, created_at } = visit
+  const { car, service_orders, product_orders, staff, status, created_at, current_mileage, next_mileage } = visit
   const carLabel = car?.model
-    ? [car.model.model].filter(Boolean).join(" ") || "خودروی ��اشناس"
+    ? [car.model.make, car.model.model].filter(Boolean).join(" ") || "خودروی ناشناس"
     : "خودروی ناشناس"
+
+  const servicesTotal = service_orders.reduce((s, o) => s + o.price, 0)
+  const productsTotal = product_orders.reduce((s, o) => s + o.total_price, 0)
 
   return (
     <Card
@@ -326,14 +356,20 @@ function VisitCard({
 
       {/* بدنه کارت */}
       <div className="space-y-3 p-4">
-        {/* نام خودرو */}
-        <div>
-          <h3 className="font-bold leading-tight">{carLabel}</h3>
-          {car?.manufacturing_year != null && (
-            <p className="mt-0.5 text-sm text-muted-foreground">
-              مدل {toFa(car.manufacturing_year)}
-            </p>
-          )}
+        {/* نام خودرو + تاریخ */}
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <h3 className="font-bold leading-tight truncate">{carLabel}</h3>
+            {car?.manufacturing_year != null && (
+              <p className="mt-0.5 text-sm text-muted-foreground">
+                مدل {toFa(car.manufacturing_year)}
+              </p>
+            )}
+          </div>
+          <div className="flex items-center gap-1.5 shrink-0 text-xs text-muted-foreground">
+            <Clock className="size-3" />
+            {formatJalaliDate(created_at)}
+          </div>
         </div>
 
         {/* شماره تلفن مالک */}
@@ -344,33 +380,98 @@ function VisitCard({
           </div>
         )}
 
-        {/* سرویس‌ها */}
-        {service_orders.length > 0 && (
-          <div className="space-y-1.5">
-            {service_orders.slice(0, 3).map((so: ServiceOrder) => (
-              <div
-                key={so.id}
-                className="flex items-center gap-1.5 text-sm text-muted-foreground"
-              >
-                <Wrench className="size-3.5 shrink-0 text-primary" />
-                <span className="truncate">
-                  {so.title ?? so.service?.title ?? "سرویس بدون عنوان"}
-                </span>
+        {/* کیلومتر فعلی و بعدی */}
+        {(current_mileage != null || next_mileage != null) && (
+          <div className="flex flex-wrap gap-3 rounded-lg border border-border bg-muted/30 px-3 py-2 text-sm">
+            {current_mileage != null && (
+              <div className="flex items-center gap-1.5">
+                <Gauge className="size-3.5 text-muted-foreground" />
+                <span className="text-muted-foreground">فعلی:</span>
+                <span className="font-medium">{toFa(current_mileage)}</span>
               </div>
-            ))}
-            {service_orders.length > 3 && (
-              <p className="text-xs text-muted-foreground">
-                + {toFa(service_orders.length - 3)} سرویس دیگر
-              </p>
+            )}
+            {next_mileage != null && (
+              <div className="flex items-center gap-1.5">
+                <Gauge className="size-3.5 text-chart-3" />
+                <span className="text-muted-foreground">بعدی:</span>
+                <span className="font-medium">{toFa(next_mileage)}</span>
+              </div>
             )}
           </div>
         )}
 
-        {/* تاریخ ثبت */}
-        <div className="flex items-center gap-1.5 border-t border-border pt-3 text-xs text-muted-foreground">
-          <Clock className="size-3.5" />
-          {formatJalaliDate(created_at)}
-        </div>
+        {/* سرویس‌کاران */}
+        {staff && staff.length > 0 && (
+          <div className="flex flex-wrap items-center gap-1.5 text-sm text-muted-foreground">
+            <Users className="size-3.5 shrink-0" />
+            <span className="font-medium text-foreground">سرویس‌کاران:</span>
+            {staff.map((s, idx) => (
+              <span key={s.id}>
+                {s.first_name} {s.last_name ?? ""}
+                {idx < staff.length - 1 && "، "}
+              </span>
+            ))}
+          </div>
+        )}
+
+        {/* سرویس‌های انجام شده */}
+        {service_orders.length > 0 && (
+          <div className="space-y-1.5">
+            <p className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
+              <Wrench className="size-3.5 text-primary" />
+              سرویس‌ها
+            </p>
+            <div className="space-y-1">
+              {service_orders.map((so: ServiceOrder) => (
+                <div
+                  key={so.id}
+                  className="flex items-center justify-between gap-2 rounded-md bg-muted/20 px-2.5 py-1.5 text-sm"
+                >
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <span className="truncate">{so.title ?? so.service?.title ?? "سرویس"}</span>
+                    {so.staff && so.staff.length > 0 && (
+                      <span className="text-xs text-muted-foreground shrink-0">
+                        ({so.staff.map((s) => s.first_name).join("، ")})
+                      </span>
+                    )}
+                  </div>
+                  <span className="shrink-0 text-muted-foreground">{formatToman(so.price)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* قطعات و کالاهای استفاده شد */}
+        {product_orders.length > 0 && (
+          <div className="space-y-1.5">
+            <p className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
+              <Package className="size-3.5 text-chart-2" />
+              قطعات
+            </p>
+            <div className="space-y-1">
+              {product_orders.map((po: ProductOrder) => (
+                <div
+                  key={po.id}
+                  className="flex items-center justify-between gap-2 rounded-md bg-muted/20 px-2.5 py-1.5 text-sm"
+                >
+                  <span className="truncate">{po.product?.name ?? "کالا"}</span>
+                  <span className="shrink-0 text-muted-foreground">
+                    {toFa(po.quantity)} عدد × {formatToman(po.total_price / po.quantity)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* جمع کل */}
+        {(service_orders.length > 0 || product_orders.length > 0) && (
+          <div className="flex items-center justify-between border-t border-border pt-2 text-sm font-semibold">
+            <span>جمع کل</span>
+            <span className="text-primary">{formatToman(servicesTotal + productsTotal)}</span>
+          </div>
+        )}
       </div>
     </Card>
   )

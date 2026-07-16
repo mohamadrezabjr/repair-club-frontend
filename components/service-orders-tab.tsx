@@ -57,7 +57,7 @@ function orderTitle(so: ServiceOrder): string {
 
 interface ServiceOrdersTabProps {
   visitId: number
-  visit: Visit
+  visit?: Visit
   serviceOrders: ServiceOrder[]
   onUpdate: (updatedOrders: ServiceOrder[]) => void
 }
@@ -929,7 +929,7 @@ function EditServiceOrderDialog({
 // ─── دیالوگ افزودن سرویس‌کار به ویزیت ─────────────────────────────────────
 
 interface AddVisitStaffDialogProps {
-  visit: Visit
+  visit?: Visit
   open: boolean
   onOpenChange: (open: boolean) => void
   onUpdate: () => void
@@ -943,13 +943,13 @@ function AddVisitStaffDialog({ visit, open, onOpenChange, onUpdate }: AddVisitSt
   )
 
   const [selectedIds, setSelectedIds] = useState<number[]>(
-    visit.staff?.map((s) => s.id) ?? [],
+    visit?.staff?.map((s) => s.id) ?? [],
   )
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
     if (open) {
-      setSelectedIds(visit.staff?.map((s) => s.id) ?? [])
+      setSelectedIds(visit?.staff?.map((s) => s.id) ?? [])
     }
   }, [open, visit])
 
@@ -960,6 +960,10 @@ function AddVisitStaffDialog({ visit, open, onOpenChange, onUpdate }: AddVisitSt
   }
 
   async function handleSave() {
+    if (!visit) {
+      toast.error("ویزیت مشخص نیست")
+      return
+    }
     setSaving(true)
     try {
       await updateVisit(visit.id, { staff: selectedIds } as any)
