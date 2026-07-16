@@ -107,9 +107,9 @@ export function StaffManagementDialog() {
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger render={<Button variant="ghost" size="sm" className="gap-1.5 text-muted-foreground hover:text-foreground" />}>
+      <DialogTrigger render={<Button variant="ghost" className="w-full justify-start gap-2.5 rounded-lg px-3 py-2 text-sm font-medium text-foreground hover:bg-muted" />}>
         <Users className="size-4" />
-        <span className="hidden sm:inline">سرویس‌کاران</span>
+        سرویس‌کاران
       </DialogTrigger>
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg" dir="rtl">
         <DialogHeader className="text-right">
@@ -161,7 +161,7 @@ export function StaffManagementDialog() {
             </div>
             <div className="space-y-1.5">
               <Label>شماره تماس</Label>
-              <Input dir="ltr" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="۰۹۱۲۳۴۵۶۷۸۹" />
+              <Input dir="ltr" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="۰۹۱۲۳��۵۶۷۸۹" />
             </div>
             <div className="space-y-1.5">
               <Label>نقش</Label>

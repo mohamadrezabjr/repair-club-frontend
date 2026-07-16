@@ -160,42 +160,7 @@ export default function HistoryPage() {
           <div className="flex shrink-0 items-center gap-1 sm:gap-2">
             {authLoading ? (
               <Loader2 className="size-5 animate-spin text-muted-foreground" />
-            ) : user ? (
-              <div className="flex items-center gap-2 sm:gap-3">
-                <div className="flex items-center gap-1.5 rounded-xl border border-border bg-muted/40 px-2 py-1.5 sm:gap-2 sm:px-3">
-                  <UserCircle className="size-5 shrink-0 text-primary" />
-                  <span className="hidden text-sm font-medium leading-none sm:inline">
-                    {user.profile?.first_name && user.profile?.last_name
-                      ? `${user.profile.first_name} ${user.profile.last_name}`
-                      : (user.profile?.first_name ?? user.phone)}
-                  </span>
-                </div>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={handleLogout}
-                  className="gap-1.5 text-muted-foreground hover:text-destructive"
-                >
-                  <LogOut className="size-4" />
-                  <span className="hidden sm:inline">خروج</span>
-                </Button>
-              </div>
-            ) : (
-              <div className="flex items-center gap-1 sm:gap-2">
-                <Button variant="ghost" size="sm" asChild>
-                  <Link href="/register">
-                    <span className="hidden sm:inline">ثبت‌نام</span>
-                    <span className="sm:hidden">عضویت</span>
-                  </Link>
-                </Button>
-                <Button size="sm" asChild className="gap-1.5">
-                  <Link href="/login">
-                    <LogIn className="size-4" />
-                    <span className="hidden sm:inline">ورود</span>
-                  </Link>
-                </Button>
-              </div>
-            )}
+            ) : null}
             <ThemeToggle />
             <MobileNav />
           </div>
@@ -236,7 +201,7 @@ export default function HistoryPage() {
               />
             </div>
 
-            {/* از تار��خ */}
+            {/* از تاریخ */}
             <div className="space-y-1.5">
               <label className="text-sm font-medium text-muted-foreground">
                 از تاریخ
@@ -345,7 +310,7 @@ function VisitCard({
 }) {
   const { car, service_orders, status, created_at } = visit
   const carLabel = car?.model
-    ? [car.model.model].filter(Boolean).join(" ") || "خودروی ناشناس"
+    ? [car.model.model].filter(Boolean).join(" ") || "خودروی ��اشناس"
     : "خودروی ناشناس"
 
   return (

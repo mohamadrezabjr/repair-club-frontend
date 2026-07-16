@@ -3,7 +3,6 @@
 import { useState } from "react";
 import useSWR from "swr";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import {
   ArrowLeft,
   ArrowUpDown,
@@ -11,8 +10,6 @@ import {
   Clock,
   History,
   Loader2,
-  LogIn,
-  LogOut,
   UserCircle,
   Warehouse,
   Wrench,
@@ -28,7 +25,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { AddCarDialog } from "@/components/add-car-dialog";
-import { StaffManagementDialog } from "@/components/staff-management-dialog";
 import { MobileNav } from "@/components/mobile-nav";
 import { ThemeToggle } from "@/components/theme-toggle";
 
@@ -99,13 +95,7 @@ export function VisitsDashboard() {
   } = useSWR<Visit[]>("garage/visits", fetchVisits, {
     revalidateOnFocus: true,
   });
-  const { user, isLoading: authLoading, logout } = useAuth();
-  const router = useRouter();
-
-  function handleLogout() {
-    logout();
-    router.push("/login");
-  }
+  const { isLoading: authLoading } = useAuth();
 
   // مدیریت شیت جزئیات ویزیت
   const [selectedVisit, setSelectedVisit] = useState<Visit | null>(null);
@@ -175,46 +165,8 @@ export function VisitsDashboard() {
           <div className="flex shrink-0 items-center gap-1 sm:gap-2">
             {authLoading ? (
               <Loader2 className="size-5 animate-spin text-muted-foreground" />
-            ) : user ? (
-              /* کاربر لاگین کرده — نمایش پروفایل و دکمه خروج */
-              <div className="flex items-center gap-2 sm:gap-3">
-                <div className="flex items-center gap-1.5 rounded-xl border border-border bg-muted/40 px-2 py-1.5 sm:gap-2 sm:px-3">
-                  <UserCircle className="size-5 shrink-0 text-primary" />
-                  <span className="hidden text-sm font-medium leading-none sm:inline">
-                    {user.profile?.first_name && user.profile?.last_name
-                      ? `${user.profile.first_name} ${user.profile.last_name}`
-                      : (user.profile?.first_name ?? user.phone)}
-                  </span>
-                </div>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={handleLogout}
-                  className="gap-1.5 text-muted-foreground hover:text-destructive"
-                >
-                  <LogOut className="size-4" />
-                  <span className="hidden sm:inline">خروج</span>
-                </Button>
-              </div>
-            ) : (
-              /* کاربر لاگین نکرده — دکمه‌های ورود و ثبت‌نام */
-              <div className="flex items-center gap-1 sm:gap-2">
-                <Button variant="ghost" size="sm" asChild>
-                  <Link href="/register">
-                    <span className="hidden sm:inline">ثبت‌نام</span>
-                    <span className="sm:hidden">عضویت</span>
-                  </Link>
-                </Button>
-                <Button size="sm" asChild className="gap-1.5">
-                  <Link href="/login">
-                    <LogIn className="size-4" />
-                    <span className="hidden sm:inline">ورود</span>
-                  </Link>
-                </Button>
-              </div>
-            )}
+            ) : null}
             <AddCarDialog onSuccessAction={() => mutate()} />
-            <StaffManagementDialog />
             <MobileNav />
             <ThemeToggle />
           </div>
