@@ -9,8 +9,6 @@ import {
   Clock,
   History,
   Loader2,
-  LogIn,
-  LogOut,
   Search,
   UserCircle,
   Warehouse,
@@ -25,7 +23,7 @@ import { ThemeToggle } from "@/components/theme-toggle"
 import { MobileNav } from "@/components/mobile-nav"
 
 import { LicensePlate } from "@/components/license-plate"
-import { VisitDetailSheet } from "@/components/visit-detail-sheet"
+import { VisitReadonlySheet } from "@/components/visit-readonly-sheet"
 import { useAuth } from "@/components/auth-provider"
 import { searchVisits, type VisitSearchParams } from "@/lib/api"
 import { toFa, VISIT_STATUS_LABEL } from "@/lib/format"
@@ -286,15 +284,10 @@ export default function HistoryPage() {
         </section>
       </main>
 
-      <VisitDetailSheet
+      <VisitReadonlySheet
         visit={selectedVisit}
         open={sheetOpen}
         onOpenChange={setSheetOpen}
-        onUpdate={() => {
-          if (debouncedParams) {
-            mutate()
-          }
-        }}
       />
     </div>
   )

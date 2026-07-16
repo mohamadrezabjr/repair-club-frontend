@@ -1538,7 +1538,7 @@ export function AddCarDialog({ onSuccessAction }: { onSuccessAction?: () => void
                 >
                   {submitting ? (
                     <>
-                      <Loader2 className="size-4 animate-spin" /> در حال ذخ��ره...
+                      <Loader2 className="size-4 animate-spin" /> در حال ذخیره...
                     </>
                   ) : (
                     <>

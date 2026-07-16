@@ -34,7 +34,8 @@ import {
   deleteServiceOrder,
   type ServiceOrderPayload,
 } from "@/lib/api"
-import type { Service, ServiceOrder, ServiceOrderStatus, Staff } from "@/lib/types"
+import type { Service, ServiceOrder, ServiceOrderStatus, Staff, Visit } from "@/lib/types"
+import { updateVisit } from "@/lib/api"
 
 // ─── ثوابت ──────────────────────────────────────────────────────────────────
 
@@ -56,16 +57,19 @@ function orderTitle(so: ServiceOrder): string {
 
 interface ServiceOrdersTabProps {
   visitId: number
+  visit: Visit
   serviceOrders: ServiceOrder[]
   onUpdate: (updatedOrders: ServiceOrder[]) => void
 }
 
 export function ServiceOrdersTab({
   visitId,
+  visit,
   serviceOrders,
   onUpdate,
 }: ServiceOrdersTabProps) {
   const [dialogOpen, setDialogOpen] = useState(false)
+  const [staffDialogOpen, setStaffDialogOpen] = useState(false)
   const [editingOrder, setEditingOrder] = useState<ServiceOrder | null>(null)
   const [updatingId, setUpdatingId] = useState<number | null>(null)
   const [deletingId, setDeletingId] = useState<number | null>(null)
@@ -107,10 +111,14 @@ export function ServiceOrdersTab({
 
   return (
     <div className="space-y-3">
-      <div className="flex justify-end">
+      <div className="flex justify-end gap-2">
         <Button size="sm" className="gap-1.5" onClick={() => setDialogOpen(true)}>
           <Plus className="size-4" />
           افزودن سرویس
+        </Button>
+        <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setStaffDialogOpen(true)}>
+          <UserCircle className="size-4" />
+          افزودن سرویس‌کار
         </Button>
       </div>
 
@@ -211,6 +219,13 @@ export function ServiceOrdersTab({
         open={dialogOpen}
         onOpenChange={setDialogOpen}
         onAdded={handleAdded}
+      />
+
+      <AddVisitStaffDialog
+        visit={visit}
+        open={staffDialogOpen}
+        onOpenChange={setStaffDialogOpen}
+        onUpdate={() => onUpdate(serviceOrders)}
       />
 
       {editingOrder && (
@@ -902,6 +917,118 @@ function EditServiceOrderDialog({
             انصراف
           </Button>
           <Button onClick={handleSave} disabled={saving} className="gap-1.5">
+            {saving ? <Loader2 className="size-4 animate-spin" /> : null}
+            ذخیره
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+// ─── دیالوگ افزودن سرویس‌کار به ویزیت ─────────────────────────────────────
+
+interface AddVisitStaffDialogProps {
+  visit: Visit
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  onUpdate: () => void
+}
+
+function AddVisitStaffDialog({ visit, open, onOpenChange, onUpdate }: AddVisitStaffDialogProps) {
+  const { data: staffList = [], isLoading } = useSWR<Staff[]>(
+    open ? "garage-staff" : null,
+    fetchStaff,
+    { revalidateOnFocus: false },
+  )
+
+  const [selectedIds, setSelectedIds] = useState<number[]>(
+    visit.staff?.map((s) => s.id) ?? [],
+  )
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    if (open) {
+      setSelectedIds(visit.staff?.map((s) => s.id) ?? [])
+    }
+  }, [open, visit])
+
+  function toggleStaff(staffId: number) {
+    setSelectedIds((prev) =>
+      prev.includes(staffId) ? prev.filter((id) => id !== staffId) : [...prev, staffId],
+    )
+  }
+
+  async function handleSave() {
+    setSaving(true)
+    try {
+      await updateVisit(visit.id, { staff: selectedIds } as any)
+      toast.success("سرویس‌کاران ویزیت بروز شدند")
+      onUpdate()
+      onOpenChange(false)
+    } catch {
+      toast.error("خطا در ذخیره سرویس‌کاران")
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md" dir="rtl">
+        <DialogHeader className="text-right">
+          <DialogTitle>افزودن سرویس‌کار به ویزیت</DialogTitle>
+        </DialogHeader>
+
+        <div className="space-y-4 py-2">
+          {isLoading ? (
+            <div className="flex justify-center py-6">
+              <Loader2 className="size-6 animate-spin text-muted-foreground" />
+            </div>
+          ) : staffList.length === 0 ? (
+            <div className="flex flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-border py-10 text-center text-muted-foreground">
+              <UserCircle className="size-6 opacity-50" />
+              <p className="text-sm">هنوز سرویس‌کاری ثبت نشده است.</p>
+              <p className="text-xs">از منوی اصلی &rarr; سرویس‌کاران را ثبت کنید</p>
+            </div>
+          ) : (
+            <div className="max-h-60 space-y-1 overflow-y-auto">
+              {staffList.map((staff) => {
+                const selected = selectedIds.includes(staff.id)
+                return (
+                  <label
+                    key={staff.id}
+                    className={cn(
+                      "flex cursor-pointer items-center gap-3 rounded-lg border px-3 py-2.5 text-sm transition-colors",
+                      selected
+                        ? "border-primary bg-primary/5"
+                        : "border-border hover:bg-muted/40",
+                    )}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selected}
+                      onChange={() => toggleStaff(staff.id)}
+                      className="size-4 accent-primary"
+                    />
+                    <div className="min-w-0 flex-1">
+                      <p className="font-medium">{staff.first_name} {staff.last_name ?? ""}</p>
+                      {staff.role && (
+                        <p className="text-xs text-muted-foreground">{staff.role.name}</p>
+                      )}
+                    </div>
+                  </label>
+                )
+              })}
+            </div>
+          )}
+        </div>
+
+        <DialogFooter className="gap-2 sm:gap-2">
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
+            انصراف
+          </Button>
+          <Button onClick={handleSave} disabled={saving || staffList.length === 0} className="gap-1.5">
             {saving ? <Loader2 className="size-4 animate-spin" /> : null}
             ذخیره
           </Button>

@@ -134,13 +134,16 @@ export interface Visit {
   service_orders: ServiceOrder[]
   product_orders: ProductOrder[]
   status: VisitStatus
+  staff: Staff[]
+  current_mileage: number | null
+  next_mileage: number | null
   created_at: string
   updated_at: string
   description: string | null
   is_ready?: boolean
 }
 
-// ─── Auth ───────────────────────────────────────────────────────────────────
+// ─── Auth ───────────��───────────────────────────────────────────────────────
 
 /** کاربر احراز هویت‌شده — منطبق با تعریف رسمی User */
 export type AuthUser = User

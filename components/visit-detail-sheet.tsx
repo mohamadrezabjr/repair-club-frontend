@@ -12,6 +12,8 @@ import {
   Phone,
   Save,
   User as UserIcon,
+  UserCircle,
+  Users,
   Wrench,
   X,
 } from "lucide-react"
@@ -37,6 +39,7 @@ import {
 } from "@/components/ui/select"
 import { ServiceOrdersTab } from "@/components/service-orders-tab"
 import { ProductOrdersTab } from "@/components/product-orders-tab"
+import { VisitStaffTab } from "@/components/visit-staff-tab"
 import { VisitFinishModal } from "@/components/visit-finish-modal"
 import type {
   ProductOrder,
@@ -286,6 +289,19 @@ export function VisitDetailSheet({
                 )
               })()}
 
+              {/* سرویس‌کاران کلی ویزیت */}
+              {visit.staff && visit.staff.length > 0 && (
+                <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+                  <UserCircle className="size-3.5 shrink-0" />
+                  <span className="font-medium text-foreground">سرویس‌کاران:</span>
+                  {visit.staff.map((s, idx) => (
+                    <span key={s.id}>
+                      {s.first_name} {s.last_name ?? ""}
+                      {idx < visit.staff.length - 1 && "، "}
+                    </span>
+                  ))}
+                </div>
+              )}
               {!editingCar ? (
                 /* ── نمایش فقط‌خواندنی ── */
                 <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm sm:grid-cols-3">
@@ -495,6 +511,7 @@ export function VisitDetailSheet({
             <TabsContent value="services" className="mt-4">
               <ServiceOrdersTab
                 visitId={visit.id}
+                visit={visit}
                 serviceOrders={localOrders}
                 onUpdate={(updated) => {
                   setLocalOrders(updated)

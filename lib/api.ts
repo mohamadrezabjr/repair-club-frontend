@@ -161,12 +161,14 @@ export interface CreateVisitWithCarPayload {
   }
   status?: "queued" | "repairing" | "ready" | "delivered" | "cancelled"
   description?: string | null
+  current_mileage?: number | null
+  next_mileage?: number | null
 }
 
 /**
  * ساخت ویزیت جدید با ماشین (موجود یا جدید)
  * POST /garage/visits/
- * - برای ماشین موجود: car.id تعیین می‌شه و model.id و ... باقی فیلدها اختیاری
+ * - برای ماشین موجود: car.id تع��ین می‌شه و model.id و ... باقی فیلدها اختیاری
  * - برای ماشین جدید: car.id را اختیاری بگذار یا حذف کن، model با اطلاعات کامل و id: null
  */
 export async function createVisitWithCar(
@@ -274,12 +276,12 @@ export async function updateProductOrder(
 }
 
 /**
- * آپدیت ویزیت (وضعیت یا توضیحات)
+ * آپدیت ویزیت (وضعیت، توضیحات، سرویس‌کاران، کیلومتر)
  * PATCH garage/visits/<visit_id>/
  */
 export async function updateVisit(
   visitId: number,
-  body: Partial<{ status: string; description: string | null }>,
+  body: Partial<{ status: string; description: string | null; staff: number[]; current_mileage: number | null; next_mileage: number | null }>,
 ): Promise<ApiVisit> {
   const { data } = await http.patch<ApiVisit>(`garage/visits/${visitId}/`, body)
   return data

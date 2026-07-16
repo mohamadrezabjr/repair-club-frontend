@@ -305,6 +305,14 @@ function VisitCard({
           )}
         </div>
 
+        {/* سرویس‌کاران کلی */}
+        {visit.staff && visit.staff.length > 0 && (
+          <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+            <UserCircle className="size-3 shrink-0" />
+            <span>سرویس‌کاران: {visit.staff.map((s) => `${s.first_name} ${s.last_name ?? ""}`).join("، ")}</span>
+          </div>
+        )}
+
         {/* سرویس‌ها */}
         {service_orders.length > 0 && (
           <div className="space-y-1.5">
