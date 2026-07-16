@@ -230,6 +230,7 @@ export interface ServiceOrderPayload {
   extra_description?: string | null
   price: number
   status: ServiceOrderStatus
+  staff?: number[]
 }
 
 /**
@@ -396,4 +397,51 @@ export async function searchVisits(params: VisitSearchParams): Promise<ApiVisit[
   } catch {
     return []
   }
+}
+
+// ─── Staff ────────────────────────────────────────────────────────────────────
+
+import type { Staff, StaffRole } from "@/lib/types"
+
+/** دریافت لیست کارکنان فعال */
+export async function fetchStaff(): Promise<Staff[]> {
+  try {
+    const { data } = await http.get<Staff[]>("garage/staff/")
+    return data
+  } catch {
+    return []
+  }
+}
+
+/** دریافت لیست نقش‌ها */
+export async function fetchStaffRoles(): Promise<StaffRole[]> {
+  try {
+    const { data } = await http.get<StaffRole[]>("garage/staff/roles/")
+    return data
+  } catch {
+    return []
+  }
+}
+
+/** ساخت نقش جدید */
+export async function createStaffRole(body: Partial<StaffRole>): Promise<StaffRole> {
+  const { data } = await http.post<StaffRole>("garage/staff/roles/", body)
+  return data
+}
+
+/** ساخت کارکن جدید */
+export async function createStaff(body: Partial<Staff>): Promise<Staff> {
+  const { data } = await http.post<Staff>("garage/staff/", body)
+  return data
+}
+
+/** ویرایش کارکن */
+export async function updateStaff(id: number, body: Partial<Staff>): Promise<Staff> {
+  const { data } = await http.patch<Staff>(`garage/staff/${id}/`, body)
+  return data
+}
+
+/** حذف کارکن */
+export async function deleteStaff(id: number): Promise<void> {
+  await http.delete(`garage/staff/${id}/`)
 }

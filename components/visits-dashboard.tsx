@@ -28,6 +28,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { AddCarDialog } from "@/components/add-car-dialog";
+import { StaffManagementDialog } from "@/components/staff-management-dialog";
+import { MobileNav } from "@/components/mobile-nav";
 import { ThemeToggle } from "@/components/theme-toggle";
 
 import { LicensePlate } from "@/components/license-plate";
@@ -212,6 +214,8 @@ export function VisitsDashboard() {
               </div>
             )}
             <AddCarDialog onSuccessAction={() => mutate()} />
+            <StaffManagementDialog />
+            <MobileNav />
             <ThemeToggle />
           </div>
         </div>
@@ -352,7 +356,7 @@ function VisitCard({
         {/* سرویس‌ها */}
         {service_orders.length > 0 && (
           <div className="space-y-1.5">
-            {service_orders.map((so: ServiceOrder) => (
+            {service_orders.slice(0, 3).map((so: ServiceOrder) => (
               <div
                 key={so.id}
                 className="flex items-center gap-1.5 text-sm text-muted-foreground"
@@ -363,6 +367,27 @@ function VisitCard({
                 </span>
               </div>
             ))}
+            {service_orders.length > 3 && (
+              <p className="text-xs text-muted-foreground">
+                + {toFa(service_orders.length - 3)} سرویس دیگر
+              </p>
+            )}
+          </div>
+        )}
+
+        {/* سرویس‌کاران */}
+        {service_orders.some((so) => so.staff && so.staff.length > 0) && (
+          <div className="space-y-1">
+            {service_orders.slice(0, 3).map((so) =>
+              so.staff && so.staff.length > 0 ? (
+                <div key={so.id} className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <UserCircle className="size-3 shrink-0" />
+                  <span className="truncate">
+                    {so.title ?? so.service?.title ?? "سرویس"}: {so.staff.map((s) => s.first_name).join("، ")}
+                  </span>
+                </div>
+              ) : null
+            )}
           </div>
         )}
 

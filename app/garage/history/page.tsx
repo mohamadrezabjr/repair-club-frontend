@@ -22,6 +22,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { ThemeToggle } from "@/components/theme-toggle"
+import { MobileNav } from "@/components/mobile-nav"
 
 import { LicensePlate } from "@/components/license-plate"
 import { VisitDetailSheet } from "@/components/visit-detail-sheet"
@@ -196,6 +197,7 @@ export default function HistoryPage() {
               </div>
             )}
             <ThemeToggle />
+            <MobileNav />
           </div>
         </div>
       </header>
@@ -234,7 +236,7 @@ export default function HistoryPage() {
               />
             </div>
 
-            {/* از تاریخ */}
+            {/* از تار��خ */}
             <div className="space-y-1.5">
               <label className="text-sm font-medium text-muted-foreground">
                 از تاریخ

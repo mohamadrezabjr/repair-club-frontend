@@ -3,7 +3,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react"
 import { createPortal } from "react-dom"
 import useSWR from "swr"
-import { ChevronDown, Edit2, Loader2, Plus, Trash2, Wrench } from "lucide-react"
+import { ChevronDown, Edit2, Loader2, Plus, Trash2, UserCircle, Wrench } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -27,13 +27,14 @@ import { cn } from "@/lib/utils"
 import { formatToman, toFa, SERVICE_ORDER_STATUS_LABEL as SERVICE_ORDER_STATUS_LABEL_SHARED } from "@/lib/format"
 import {
   fetchServices,
+  fetchStaff,
   submitVisitOrders,
   updateServiceOrder,
   updateServiceOrderStatus,
   deleteServiceOrder,
   type ServiceOrderPayload,
 } from "@/lib/api"
-import type { Service, ServiceOrder, ServiceOrderStatus } from "@/lib/types"
+import type { Service, ServiceOrder, ServiceOrderStatus, Staff } from "@/lib/types"
 
 // ─── ثوابت ──────────────────────────────────────────────────────────────────
 
@@ -187,6 +188,19 @@ export function ServiceOrdersTab({
                   <Loader2 className="size-3.5 animate-spin text-muted-foreground" />
                 )}
               </div>
+
+              {/* سرویس‌کاران */}
+              {so.staff && so.staff.length > 0 && (
+                <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+                  <UserCircle className="size-3" />
+                  {so.staff.map((s, idx) => (
+                    <span key={s.id}>
+                      {s.first_name} {s.last_name ?? ""}
+                      {idx < so.staff.length - 1 && "، "}
+                    </span>
+                  ))}
+                </div>
+              )}
             </li>
           ))}
         </ul>
@@ -378,7 +392,7 @@ interface AddServiceOrderDialogProps {
   onAdded: (allOrders: ServiceOrder[]) => void
 }
 
-// فرم مشترک اطلاعات س��ارش
+// فرم مشترک اطلاعات سرویس
 const EMPTY_ORDER_FIELDS = {
   title: "",
   extraDesc: "",
@@ -409,6 +423,7 @@ function AddServiceOrderDialog({
   const [orderFields, setOrderFields] = useState(EMPTY_ORDER_FIELDS)
   const [newServiceForm, setNewServiceForm] = useState(EMPTY_NEW_SERVICE)
   const [submitting, setSubmitting] = useState(false)
+  const [selectedStaffIds, setSelectedStaffIds] = useState<number[]>([])
 
   const setO = <K extends keyof typeof EMPTY_ORDER_FIELDS>(
     key: K,
@@ -423,6 +438,11 @@ function AddServiceOrderDialog({
   const { data: services = [], isLoading: servicesLoading } = useSWR<Service[]>(
     open ? "garage/services" : null,
     fetchServices,
+  )
+
+  const { data: staffList = [] } = useSWR<Staff[]>(
+    open ? "garage/staff" : null,
+    fetchStaff,
   )
 
   function handleSelectService(s: Service) {
@@ -455,12 +475,19 @@ function AddServiceOrderDialog({
     }
   }
 
+  function toggleStaff(staffId: number) {
+    setSelectedStaffIds((prev) =>
+      prev.includes(staffId) ? prev.filter((id) => id !== staffId) : [...prev, staffId],
+    )
+  }
+
   function reset() {
     setQuery("")
     setSelectedService(null)
     setIsCreatingNew(false)
     setOrderFields(EMPTY_ORDER_FIELDS)
     setNewServiceForm(EMPTY_NEW_SERVICE)
+    setSelectedStaffIds([])
   }
 
   function handleClose(o: boolean) {
@@ -498,10 +525,11 @@ function AddServiceOrderDialog({
         extra_description: orderFields.extraDesc.trim() || null,
         price: Number(orderFields.price),
         status: orderFields.status,
+        staff: selectedStaffIds.length > 0 ? selectedStaffIds : undefined,
       }
     } else {
       if (!selectedService) {
-        toast.error("لطفاً ی���� سرویس انتخاب کنید یا سرویس جدید بسازید")
+        toast.error("لطفاً یک سرویس انتخاب کنید یا سرویس جدید بسازید")
         return
       }
       if (!orderFields.price.trim()) {
@@ -515,6 +543,7 @@ function AddServiceOrderDialog({
         extra_description: orderFields.extraDesc.trim() || null,
         price: Number(orderFields.price),
         status: orderFields.status,
+        staff: selectedStaffIds.length > 0 ? selectedStaffIds : undefined,
       }
     }
 
@@ -695,6 +724,37 @@ function AddServiceOrderDialog({
                     </SelectContent>
                   </Select>
                 </div>
+
+                {/* سرویس‌کاران */}
+                {staffList.length > 0 && (
+                  <div className="space-y-1.5">
+                    <Label>
+                      سرویس‌کاران{" "}
+                      <span className="text-xs text-muted-foreground">(اختیاری)</span>
+                    </Label>
+                    <div className="flex flex-wrap gap-1.5">
+                      {staffList.map((staff) => {
+                        const selected = selectedStaffIds.includes(staff.id)
+                        return (
+                          <button
+                            key={staff.id}
+                            type="button"
+                            onClick={() => toggleStaff(staff.id)}
+                            className={cn(
+                              "inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium transition-colors",
+                              selected
+                                ? "border-primary bg-primary/10 text-primary"
+                                : "border-border bg-muted/30 text-muted-foreground hover:border-muted-foreground/30",
+                            )}
+                          >
+                            <UserCircle className="size-3" />
+                            {staff.first_name} {staff.last_name ?? ""}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
               </div>
             </>
           )}

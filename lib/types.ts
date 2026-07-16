@@ -40,6 +40,22 @@ export interface User {
   role: UserRole
 }
 
+export interface StaffRole {
+  id: number
+  name: string
+  description: string | null
+}
+
+export interface Staff {
+  id: number
+  first_name: string
+  last_name: string | null
+  phone: string | null
+  role: StaffRole | null
+  is_active: boolean
+  created_at: string
+}
+
 export interface CarModel {
   id: number
   make: string | null
@@ -107,6 +123,7 @@ export interface ServiceOrder {
   extra_description: string | null
   price: number
   status: ServiceOrderStatus
+  staff: Staff[]
   created_at: string
   updated_at: string
 }
