@@ -250,6 +250,13 @@ export function VisitDetailSheet({
           ? Number(editMileageForm.next_mileage)
           : null,
       })
+      // هم‌زمان کارکرد (last_mileage) ماشین رو هم آپدیت کن
+      if (car?.id && editMileageForm.current_mileage) {
+        const updatedCar = await updateCar(car.id, {
+          last_mileage: Number(editMileageForm.current_mileage),
+        })
+        setLocalCar(updatedCar)
+      }
       setEditingMileage(false)
       setLocalCurrentMileage(editMileageForm.current_mileage ? Number(editMileageForm.current_mileage) : null)
       setLocalNextMileage(editMileageForm.next_mileage ? Number(editMileageForm.next_mileage) : null)
