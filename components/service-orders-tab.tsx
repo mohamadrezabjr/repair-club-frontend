@@ -202,7 +202,7 @@ export function ServiceOrdersTab({
                 <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
                   <UserCircle className="size-3" />
                   {so.staff.map((s, idx) => (
-                    <span key={s.id}>
+                    <span key={`${s.id}-${idx}`}>
                       {s.first_name} {s.last_name ?? ""}
                       {idx < so.staff.length - 1 && "، "}
                     </span>
