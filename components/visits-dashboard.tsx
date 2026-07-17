@@ -27,6 +27,7 @@ import {
 import { AddCarDialog } from "@/components/add-car-dialog";
 import { MobileNav } from "@/components/mobile-nav";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { StaffManagementDialog } from "@/components/staff-management-dialog";
 
 import { LicensePlate } from "@/components/license-plate";
 import { VisitDetailSheet } from "@/components/visit-detail-sheet";
@@ -167,6 +168,9 @@ export function VisitsDashboard() {
               <Loader2 className="size-5 animate-spin text-muted-foreground" />
             ) : null}
             <AddCarDialog onSuccessAction={() => mutate()} />
+            <div className="hidden sm:flex">
+              <StaffManagementDialog />
+            </div>
             <MobileNav />
             <ThemeToggle />
           </div>
