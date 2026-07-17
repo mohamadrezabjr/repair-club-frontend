@@ -131,8 +131,15 @@ export function VisitDetailSheet({
   const [localCar, setLocalCar] = useState(visit?.car ?? null)
   const [savingCar, setSavingCar] = useState(false)
 
-  // ── مودال پایان ویزیت ──
-  const [finishModalOpen, setFinishModalOpen] = useState(false)
+  // ── ویرایش کیلومتر ویزیت ──
+  const [editingMileage, setEditingMileage] = useState(false)
+  const [editMileageForm, setEditMileageForm] = useState({
+    current_mileage: "",
+    next_mileage: "",
+  })
+  const [savingMileage, setSavingMileage] = useState(false)
+  const [localCurrentMileage, setLocalCurrentMileage] = useState<number | null>(visit?.current_mileage ?? null)
+  const [localNextMileage, setLocalNextMileage] = useState<number | null>(visit?.next_mileage ?? null)
 
   // sync وقتی ویزیت از پدر عوض شد
   useEffect(() => {
@@ -144,7 +151,17 @@ export function VisitDetailSheet({
     setEditingInfo(false)
     setLocalCar(visit?.car ?? null)
     setEditingCar(false)
+    setEditingMileage(false)
+    setEditMileageForm({
+      current_mileage: visit?.current_mileage != null ? String(visit.current_mileage) : "",
+      next_mileage: visit?.next_mileage != null ? String(visit.next_mileage) : "",
+    })
+    setLocalCurrentMileage(visit?.current_mileage ?? null)
+    setLocalNextMileage(visit?.next_mileage ?? null)
   }, [visit])
+
+  // ── مودال پایان ویزیت ──
+  const [finishModalOpen, setFinishModalOpen] = useState(false)
 
   if (!visit) return null
 
@@ -218,6 +235,30 @@ export function VisitDetailSheet({
       toast.error("خطا در ذخیره اطلاعات خودرو")
     } finally {
       setSavingCar(false)
+    }
+  }
+
+  // ── ذخیره اطلاعات کیلومتر ویزیت ──
+  async function saveMileage() {
+    setSavingMileage(true)
+    try {
+      await updateVisit(visit.id, {
+        current_mileage: editMileageForm.current_mileage
+          ? Number(editMileageForm.current_mileage)
+          : null,
+        next_mileage: editMileageForm.next_mileage
+          ? Number(editMileageForm.next_mileage)
+          : null,
+      })
+      setEditingMileage(false)
+      setLocalCurrentMileage(editMileageForm.current_mileage ? Number(editMileageForm.current_mileage) : null)
+      setLocalNextMileage(editMileageForm.next_mileage ? Number(editMileageForm.next_mileage) : null)
+      toast.success("اطلاعات کیلومتر بروز شد")
+      onUpdate?.()
+    } catch {
+      toast.error("خطا در ذخیره اطلاعات کیلومتر")
+    } finally {
+      setSavingMileage(false)
     }
   }
 
@@ -410,65 +451,115 @@ export function VisitDetailSheet({
               )}
             </div>
 
-            {/* ── فرم ویرایش ویزیت ── */}
-            {editingInfo && (
-              <div className="space-y-3 rounded-lg border border-primary/30 bg-primary/5 p-3">
-                <div className="space-y-1.5">
-                  <label className="text-xs font-medium text-muted-foreground">
-                    وضعیت ویزیت
-                  </label>
-                  <Select
-                    value={editStatus}
-                    onValueChange={(v) => setEditStatus(v as VisitStatus)}
-                  >
-                    <SelectTrigger className="h-9 bg-background">
-                      <SelectValue placeholder={VISIT_STATUS_LABEL[editStatus]} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {ALL_VISIT_STATUSES.map((s) => (
-                        <SelectItem key={s} value={s}>
-                          {VISIT_STATUS_LABEL[s]}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+            {/* ── کارت کیلومتر ویزیت ── */}
+            {!editingCar && (
+              <div className="rounded-lg border border-border bg-muted/30 p-3 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                    کیلومتر ویزیت
+                  </span>
+                  {!editingInfo && !editingMileage && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-7 gap-1.5 text-xs text-muted-foreground hover:text-foreground"
+                      onClick={() => {
+                        setEditMileageForm({
+                          current_mileage: visit?.current_mileage != null ? String(visit.current_mileage) : "",
+                          next_mileage: visit?.next_mileage != null ? String(visit.next_mileage) : "",
+                        })
+                        setEditingMileage(true)
+                      }}
+                    >
+                      <Edit2 className="size-3.5" />
+                      ویرایش
+                    </Button>
+                  )}
                 </div>
-                <div className="space-y-1.5">
-                  <label className="text-xs font-medium text-muted-foreground">
-                    توضیحات
-                  </label>
-                  <Textarea
-                    value={editDescription}
-                    onChange={(e) => setEditDescription(e.target.value)}
-                    placeholder="توضیحات ویزیت..."
-                    className="min-h-[80px] resize-none bg-background text-sm"
-                  />
-                </div>
-                <div className="flex items-center justify-end gap-2">
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={cancelEditInfo}
-                    disabled={savingInfo}
-                    className="h-8 gap-1.5 text-xs"
-                  >
-                    <X className="size-3.5" />
-                    انصراف
-                  </Button>
-                  <Button
-                    size="sm"
-                    onClick={saveInfo}
-                    disabled={savingInfo}
-                    className="h-8 gap-1.5 text-xs"
-                  >
-                    {savingInfo ? (
-                      <Loader2 className="size-3.5 animate-spin" />
+                {!editingMileage ? (
+                  <div className="flex flex-wrap gap-3">
+                    {localCurrentMileage != null ? (
+                      <div className="flex items-center gap-1.5 text-sm">
+                        <Gauge className="size-3.5 text-muted-foreground" />
+                        <span className="text-muted-foreground">فعلی:</span>
+                        <span className="font-medium">{toFa(localCurrentMileage)}</span>
+                      </div>
                     ) : (
-                      <Save className="size-3.5" />
+                      <span className="text-sm text-muted-foreground">ثبت نشده</span>
                     )}
-                    ذخیره
-                  </Button>
-                </div>
+                    {localNextMileage != null && (
+                      <div className="flex items-center gap-1.5 text-sm">
+                        <Gauge className="size-3.5 text-chart-3" />
+                        <span className="text-muted-foreground">بعدی:</span>
+                        <span className="font-medium">{toFa(localNextMileage)}</span>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-medium text-muted-foreground">
+                          کیلومتر فعلی
+                        </label>
+                        <Input
+                          inputMode="numeric"
+                          value={editMileageForm.current_mileage}
+                          onChange={(e) =>
+                            setEditMileageForm((f) => ({
+                              ...f,
+                              current_mileage: e.target.value.replace(/\D/g, ""),
+                            }))
+                          }
+                          placeholder="۵۲۰۰۰"
+                          className="h-9 bg-background text-sm"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-medium text-muted-foreground">
+                          کیلومتر بعدی
+                        </label>
+                        <Input
+                          inputMode="numeric"
+                          value={editMileageForm.next_mileage}
+                          onChange={(e) =>
+                            setEditMileageForm((f) => ({
+                              ...f,
+                              next_mileage: e.target.value.replace(/\D/g, ""),
+                            }))
+                          }
+                          placeholder="۶۰۰۰۰"
+                          className="h-9 bg-background text-sm"
+                        />
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-end gap-2">
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => setEditingMileage(false)}
+                        disabled={savingMileage}
+                        className="h-8 gap-1.5 text-xs"
+                      >
+                        <X className="size-3.5" />
+                        انصراف
+                      </Button>
+                      <Button
+                        size="sm"
+                        onClick={saveMileage}
+                        disabled={savingMileage}
+                        className="h-8 gap-1.5 text-xs"
+                      >
+                        {savingMileage ? (
+                          <Loader2 className="size-3.5 animate-spin" />
+                        ) : (
+                          <Save className="size-3.5" />
+                        )}
+                        ذخیره
+                      </Button>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 

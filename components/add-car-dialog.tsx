@@ -64,6 +64,8 @@ const emptyForm = {
   region: "",
   year: "",
   mileage: "",
+  currentMileage: "",
+  nextMileage: "",
   note: "",
 }
 
@@ -213,7 +215,7 @@ export function AddCarDialog({ onSuccessAction }: { onSuccessAction?: () => void
             String(m.model_year ?? "").includes(modelSearch),
         )
 
-  // ─────────────────── جستجوی مالک با debounce ───────────────────
+  // ────────────────── جستجوی مالک با debounce ───────────────────
 
   const handleOwnerPhoneChange = (value: string) => {
     const cleaned = value.replace(/\D/g, "")
@@ -274,6 +276,8 @@ export function AddCarDialog({ onSuccessAction }: { onSuccessAction?: () => void
       region: String(car.plate_region),
       year: String(car.manufacturing_year ?? ""),
       mileage: String(car.last_mileage ?? ""),
+      currentMileage: "",
+      nextMileage: "",
       note: "",
     })
     setSelectedModel(car.model ?? null)
@@ -296,7 +300,7 @@ export function AddCarDialog({ onSuccessAction }: { onSuccessAction?: () => void
     }
   }, [])
 
-  // ─────────────────── انتخاب مدل از dropdown ───────────────────
+  // ───────────���───── انتخاب مدل از dropdown ───────────────────
 
   const handleSelectModel = useCallback((model: ApiCarModel) => {
     setSelectedModel(model)
@@ -330,7 +334,7 @@ export function AddCarDialog({ onSuccessAction }: { onSuccessAction?: () => void
     }
   }
 
-  // ─────────────────── اعمال ویرایش مدل ───────────────────
+  // ─────���──────────── اعمال ویرایش مدل ───────────────────
 
   const handleApplyModelEdit = async () => {
     if (!selectedModel) return
@@ -482,6 +486,8 @@ export function AddCarDialog({ onSuccessAction }: { onSuccessAction?: () => void
             car: { id: selectedCar.id },
             status: "queued",
             description: visitDescription || null,
+            current_mileage: form.currentMileage ? Number(form.currentMileage) : null,
+            next_mileage: form.nextMileage ? Number(form.nextMileage) : null,
           }
         : {
             car: {
@@ -505,6 +511,8 @@ export function AddCarDialog({ onSuccessAction }: { onSuccessAction?: () => void
             } as any,
             status: "queued",
             description: visitDescription || form.note || null,
+            current_mileage: form.currentMileage ? Number(form.currentMileage) : null,
+            next_mileage: form.nextMileage ? Number(form.nextMileage) : null,
           }
 
       const createdVisit = await createVisitWithCar(payload)
@@ -523,7 +531,7 @@ export function AddCarDialog({ onSuccessAction }: { onSuccessAction?: () => void
     }
   }
 
-  // ─────────────────── رندر ───────────────────
+  // ────────────────── رندر ───────────────────
 
   return (
     <>
@@ -547,7 +555,7 @@ export function AddCarDialog({ onSuccessAction }: { onSuccessAction?: () => void
 
         <div className="space-y-5 py-4">
 
-          {/* ══════════════ مرحله ۱: پلاک ══════════════ */}
+          {/* ══════════════ مرحله ۱: پلاک ═════════════ */}
           {step === "plate" && (
             <>
               {/* دوربین */}
@@ -713,7 +721,7 @@ export function AddCarDialog({ onSuccessAction }: { onSuccessAction?: () => void
               )}
 
               {/* نمایش ماشین انتخاب‌شده */}
-              {/* │ کارت هشدار: ماشین در تعمیرگاه حضور دارد │ */}
+              {/* │ کارت هشدار: ماشین در تعمیرگاه حضور دار │ */}
               {inGarageResult?.in_garage && (() => {
                 const v = inGarageResult.active_visit
                 return (
@@ -1067,6 +1075,31 @@ export function AddCarDialog({ onSuccessAction }: { onSuccessAction?: () => void
                     </div>
                   </div>
 
+                  {/* ── کیلومتر ویزیت ── */}
+                  <div className="rounded-xl border border-border bg-card p-4 space-y-3">
+                    <span className="text-sm font-semibold">کیلومتر ویزیت</span>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1.5">
+                        <Label>کیلومتر فعلی</Label>
+                        <Input
+                          inputMode="numeric"
+                          value={form.currentMileage}
+                          onChange={(e) => set("currentMileage", e.target.value.replace(/\D/g, ""))}
+                          placeholder="مثلاً ۵۲۰۰۰"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label>کیلومتر بعدی (سرویس بعدی)</Label>
+                        <Input
+                          inputMode="numeric"
+                          value={form.nextMileage}
+                          onChange={(e) => set("nextMileage", e.target.value.replace(/\D/g, ""))}
+                          placeholder="مثلاً ۶۰۰۰۰"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
                   {/* ── توضیحات ویزیت ── */}
                   <div className="space-y-1.5">
                     <Label>مشکل اعلام‌شده / توضیحات ویزیت</Label>
@@ -1379,12 +1412,33 @@ export function AddCarDialog({ onSuccessAction }: { onSuccessAction?: () => void
                         />
                       </div>
                       <div className="space-y-1.5">
-                        <Label>کارکرد (کیلومتر)</Label>
+                        <Label>کارکرد فعلی (کیلومتر)</Label>
                         <Input
                           inputMode="numeric"
                           value={form.mileage}
                           onChange={(e) => set("mileage", e.target.value.replace(/\D/g, ""))}
                           placeholder="۵۰۰۰۰"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1.5">
+                        <Label>کیلومتر فعلی ویزیت</Label>
+                        <Input
+                          inputMode="numeric"
+                          value={form.currentMileage}
+                          onChange={(e) => set("currentMileage", e.target.value.replace(/\D/g, ""))}
+                          placeholder="مثلاً ۵۲۰۰۰"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label>کیلومتر بعدی (سرویس بعدی)</Label>
+                        <Input
+                          inputMode="numeric"
+                          value={form.nextMileage}
+                          onChange={(e) => set("nextMileage", e.target.value.replace(/\D/g, ""))}
+                          placeholder="مثلاً ۶۰۰۰۰"
                         />
                       </div>
                     </div>
