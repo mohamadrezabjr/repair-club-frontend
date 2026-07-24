@@ -11,6 +11,7 @@ import {
   History,
   Loader2,
   UserCircle,
+  Wallet,
   Warehouse,
   Wrench,
 } from "lucide-react";
@@ -168,7 +169,13 @@ export function VisitsDashboard() {
               <Loader2 className="size-5 animate-spin text-muted-foreground" />
             ) : null}
             <AddCarDialog onSuccessAction={() => mutate()} />
-            <div className="hidden sm:flex">
+            <div className="hidden items-center sm:flex">
+              <Button variant="ghost" size="icon" asChild title="حسابداری">
+                <Link href="/accounting"><Wallet className="size-5" /></Link>
+              </Button>
+              <Button variant="ghost" size="icon" asChild title="انبار">
+                <Link href="/inventory"><Warehouse className="size-5" /></Link>
+              </Button>
               <StaffManagementDialog />
             </div>
             <MobileNav />

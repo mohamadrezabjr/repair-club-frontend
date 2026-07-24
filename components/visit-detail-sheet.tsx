@@ -176,8 +176,15 @@ export function VisitDetailSheet({
     ? [car.owner.profile.first_name, car.owner.profile.last_name].filter(Boolean).join(" ")
     : null
 
-  const servicesTotal = localOrders.reduce((sum, s) => sum + s.price, 0)
-  const productsTotal = localProductOrders.reduce((sum, p) => sum + p.total_price, 0)
+  const servicesTotal = localOrders.reduce((sum, s) => sum + (Number(s.price) || 0), 0)
+  const productsTotal = localProductOrders.reduce(
+    (sum, p) =>
+      sum +
+      (Number(p.total_price) ||
+        (p.product ? Number(p.product.price) * Number(p.quantity) : 0) ||
+        0),
+    0,
+  )
   const isFinished = FINISHED_STATUSES.includes(localStatus)
 
   // ── ذخیره اطلاعات ویزیت ──

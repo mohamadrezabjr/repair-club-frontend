@@ -10,6 +10,7 @@ import {
   Search,
   UserCircle,
   Users,
+  Wallet,
   Warehouse,
   X,
 } from "lucide-react"
@@ -48,6 +49,16 @@ export function MobileNav() {
       label: "جستجوی ویزیت‌ها",
       href: "/garage/history",
       icon: <Search className="size-4" />,
+    },
+    {
+      label: "حسابداری",
+      href: "/accounting",
+      icon: <Wallet className="size-4" />,
+    },
+    {
+      label: "انبار",
+      href: "/inventory",
+      icon: <Warehouse className="size-4" />,
     },
   ]
 

@@ -45,3 +45,47 @@ export const TRANSMISSION_TYPE_LABEL: Record<TransmissionType, string> = {
   man: "دنده‌ای",
   auto: "اتوماتیک",
 }
+
+// ---- برچسب‌های بخش حسابداری ----
+import type {
+  ChequeDirection,
+  ChequeStatus,
+  PaymentMethod,
+  TransactionKind,
+} from "./types"
+
+export const TRANSACTION_KIND_LABEL: Record<TransactionKind, string> = {
+  income: "درآمد",
+  expense: "هزینه",
+}
+
+export const PAYMENT_METHOD_LABEL: Record<PaymentMethod, string> = {
+  cash: "نقدی",
+  card: "کارت",
+  transfer: "انتقال بانکی",
+  cheque: "چک",
+}
+
+export const CHEQUE_DIRECTION_LABEL: Record<ChequeDirection, string> = {
+  received: "دریافتی",
+  issued: "پرداختی",
+}
+
+export const CHEQUE_STATUS_LABEL: Record<ChequeStatus, string> = {
+  pending: "در جریان",
+  cleared: "پاس شده",
+  bounced: "برگشت خورده",
+  cancelled: "باطل شده",
+}
+
+/** مبلغ فشرده به میلیون/هزار تومان — برای کارت‌های خلاصه */
+export function formatTomanShort(value: number): string {
+  const v = value ?? 0
+  if (Math.abs(v) >= 1_000_000) {
+    return toFa((v / 1_000_000).toFixed(1).replace(/\.0$/, "")) + " م.ت"
+  }
+  if (Math.abs(v) >= 1_000) {
+    return toFa(Math.round(v / 1_000).toString()) + " هزار ت"
+  }
+  return toFa(v.toString()) + " ت"
+}

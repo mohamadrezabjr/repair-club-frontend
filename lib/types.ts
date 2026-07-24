@@ -203,3 +203,111 @@ export function carToPlate(car: Car | null | undefined): Plate | null {
     region: String(car.plate_region ?? ""),
   }
 }
+
+// ─── حسابداری ───────────────────────────────────────────────────────────────
+
+export type TransactionKind = "income" | "expense"
+export type PaymentMethod = "cash" | "card" | "transfer" | "cheque"
+export type ChequeDirection = "received" | "issued"
+export type ChequeStatus = "pending" | "cleared" | "bounced" | "cancelled"
+
+export interface TransactionCategory {
+  id: number
+  name: string
+  kind: TransactionKind
+  description: string | null
+}
+
+export interface Transaction {
+  id: number
+  kind: TransactionKind
+  kind_display?: string
+  title: string
+  amount: number
+  category: TransactionCategory | null
+  payment_method: PaymentMethod
+  payment_method_display?: string
+  description: string | null
+  occurred_at: string
+  visit: number | null
+  created_at: string
+  updated_at: string
+}
+
+export interface Cheque {
+  id: number
+  direction: ChequeDirection
+  direction_display?: string
+  status: ChequeStatus
+  status_display?: string
+  amount: number
+  cheque_number: string | null
+  bank_name: string | null
+  counterparty: string | null
+  issue_date: string | null
+  due_date: string
+  cleared_at: string | null
+  description: string | null
+  is_overdue: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface ChequeStat {
+  count: number
+  amount: number
+}
+
+export interface AccountingSummary {
+  date_from: string
+  date_to: string
+  income: {
+    services: number
+    products: number
+    other: number
+    total: number
+  }
+  expense: {
+    purchases: number
+    manual: number
+    by_category: { category: string; amount: number }[]
+    total: number
+  }
+  profit: number
+  cheques: {
+    due: ChequeStat
+    cleared: ChequeStat
+    overdue: ChequeStat
+    received_pending: ChequeStat
+    issued_pending: ChequeStat
+  }
+}
+
+// ─── انبار (گزارش و ورود کالا) ───────────────────────────────────────────────
+
+export interface StockEntry {
+  id: number
+  product: Product | null
+  quantity: number
+  unit_cost: number
+  supplier: string | null
+  description: string | null
+  total_cost: number
+  created_at: string
+}
+
+export interface LowStockItem {
+  id: number
+  name: string
+  stock: number
+  price: number
+}
+
+export interface InventoryReport {
+  product_count: number
+  total_units: number
+  total_value: number
+  out_of_stock_count: number
+  low_stock_threshold: number
+  low_stock: LowStockItem[]
+}

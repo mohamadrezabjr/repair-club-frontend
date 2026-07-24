@@ -139,3 +139,63 @@ function toFaDigits(input: number): string {
   const fa = "۰۱۲۳۴۵۶۷۸۹"
   return String(input).replace(/[0-9]/g, (d) => fa[parseInt(d)])
 }
+
+// ─── ابزار ماه شمسی (برای بخش حسابداری) ──────────────────────────────────
+// محاسبه‌ی بازه‌ی میلادی با react-date-object انجام می‌شود (همان کتابخانه‌ی
+// تقویمِ date-picker پروژه) تا تبدیل شمسی↔میلادی دقیق و قابل‌اعتماد باشد.
+
+import DateObject from "react-date-object"
+import persian from "react-date-object/calendars/persian"
+import gregorian from "react-date-object/calendars/gregorian"
+
+export const JALALI_MONTHS = [
+  "فروردین",
+  "اردیبهشت",
+  "خرداد",
+  "تیر",
+  "مرداد",
+  "شهریور",
+  "مهر",
+  "آبان",
+  "آذر",
+  "دی",
+  "بهمن",
+  "اسفند",
+]
+
+/** سال و ماه شمسی جاری */
+export function currentJalaliYearMonth(): { jy: number; jm: number } {
+  const d = new DateObject({ calendar: persian })
+  return { jy: d.year, jm: d.month.number }
+}
+
+function toIso(d: DateObject): string {
+  const g = d.convert(gregorian)
+  const y = g.year
+  const m = String(g.month.number).padStart(2, "0")
+  const day = String(g.day).padStart(2, "0")
+  return `${y}-${m}-${day}`
+}
+
+/**
+ * بازه‌ی میلادی (ISO) متناظر با یک ماه شمسی — روز اول و آخر ماه.
+ * خروجی برای ارسال به بک‌اند به‌عنوان date_from / date_to.
+ */
+export function jalaliMonthRangeIso(
+  jy: number,
+  jm: number
+): { from: string; to: string } {
+  const start = new DateObject({ calendar: persian, year: jy, month: jm, day: 1 })
+  const end = new DateObject({
+    calendar: persian,
+    year: jy,
+    month: jm,
+    day: start.month.length,
+  })
+  return { from: toIso(start), to: toIso(end) }
+}
+
+/** برچسب فارسی «تیر ۱۴۰۳» */
+export function jalaliMonthLabel(jy: number, jm: number): string {
+  return `${JALALI_MONTHS[jm - 1]} ${toFaDigits(jy)}`
+}

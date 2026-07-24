@@ -447,3 +447,193 @@ export async function updateStaff(id: number, body: Partial<Staff>): Promise<Sta
 export async function deleteStaff(id: number): Promise<void> {
   await http.delete(`garage/staff/${id}/`)
 }
+
+// ─── حسابداری ───────────────────────────────────────────────────────────────
+
+import type {
+  AccountingSummary,
+  Cheque,
+  ChequeDirection,
+  ChequeStatus,
+  InventoryReport,
+  PaymentMethod,
+  StockEntry,
+  Transaction,
+  TransactionCategory,
+  TransactionKind,
+} from "@/lib/types"
+
+/** خلاصه‌ی مالی یک بازه (ماه). date_from / date_to به‌صورت میلادی ISO */
+export async function fetchAccountingSummary(
+  dateFrom: string,
+  dateTo: string,
+): Promise<AccountingSummary | null> {
+  try {
+    const { data } = await http.get<AccountingSummary>("accounting/reports/summary/", {
+      params: { date_from: dateFrom, date_to: dateTo },
+    })
+    return data
+  } catch {
+    return null
+  }
+}
+
+export interface TransactionFilters {
+  kind?: TransactionKind
+  date_from?: string
+  date_to?: string
+  category?: number
+}
+
+export async function fetchTransactions(filters: TransactionFilters = {}): Promise<Transaction[]> {
+  try {
+    const { data } = await http.get<Transaction[]>("accounting/transactions/", { params: filters })
+    return data
+  } catch {
+    return []
+  }
+}
+
+export interface TransactionPayload {
+  kind: TransactionKind
+  title: string
+  amount: number
+  category?: number | null
+  payment_method?: PaymentMethod
+  description?: string | null
+  occurred_at: string
+  visit?: number | null
+}
+
+export async function createTransaction(body: TransactionPayload): Promise<Transaction> {
+  const { data } = await http.post<Transaction>("accounting/transactions/", body)
+  return data
+}
+
+export async function updateTransaction(
+  id: number,
+  body: Partial<TransactionPayload>,
+): Promise<Transaction> {
+  const { data } = await http.patch<Transaction>(`accounting/transactions/${id}/`, body)
+  return data
+}
+
+export async function deleteTransaction(id: number): Promise<void> {
+  await http.delete(`accounting/transactions/${id}/`)
+}
+
+export async function fetchTransactionCategories(kind?: TransactionKind): Promise<TransactionCategory[]> {
+  try {
+    const { data } = await http.get<TransactionCategory[]>("accounting/categories/", {
+      params: kind ? { kind } : undefined,
+    })
+    return data
+  } catch {
+    return []
+  }
+}
+
+export async function createTransactionCategory(
+  body: { name: string; kind: TransactionKind; description?: string | null },
+): Promise<TransactionCategory> {
+  const { data } = await http.post<TransactionCategory>("accounting/categories/", body)
+  return data
+}
+
+// ─── چک‌ها ──────────────────────────────────────────────────────────────────
+
+export interface ChequeFilters {
+  direction?: ChequeDirection
+  status?: ChequeStatus
+  due_from?: string
+  due_to?: string
+}
+
+export async function fetchCheques(filters: ChequeFilters = {}): Promise<Cheque[]> {
+  try {
+    const { data } = await http.get<Cheque[]>("accounting/cheques/", { params: filters })
+    return data
+  } catch {
+    return []
+  }
+}
+
+export interface ChequePayload {
+  direction: ChequeDirection
+  status?: ChequeStatus
+  amount: number
+  cheque_number?: string | null
+  bank_name?: string | null
+  counterparty?: string | null
+  issue_date?: string | null
+  due_date: string
+  cleared_at?: string | null
+  description?: string | null
+}
+
+export async function createCheque(body: ChequePayload): Promise<Cheque> {
+  const { data } = await http.post<Cheque>("accounting/cheques/", body)
+  return data
+}
+
+export async function updateCheque(id: number, body: Partial<ChequePayload>): Promise<Cheque> {
+  const { data } = await http.patch<Cheque>(`accounting/cheques/${id}/`, body)
+  return data
+}
+
+export async function deleteCheque(id: number): Promise<void> {
+  await http.delete(`accounting/cheques/${id}/`)
+}
+
+// ─── انبار (گزارش + ورود کالا + محصول جدید) ─────────────────────────────────
+
+export async function fetchInventoryReport(threshold?: number): Promise<InventoryReport | null> {
+  try {
+    const { data } = await http.get<InventoryReport>("inventory/report/", {
+      params: threshold != null ? { threshold } : undefined,
+    })
+    return data
+  } catch {
+    return null
+  }
+}
+
+export async function fetchStockEntries(productId?: number): Promise<StockEntry[]> {
+  try {
+    const { data } = await http.get<StockEntry[]>("inventory/stock_entries/", {
+      params: productId != null ? { product: productId } : undefined,
+    })
+    return data
+  } catch {
+    return []
+  }
+}
+
+export interface StockEntryPayload {
+  product: number
+  quantity: number
+  /** قیمت جدید کالا؛ اگر ارسال نشود قیمت فعلی حفظ می‌شود */
+  unit_cost?: number
+  supplier?: string | null
+  description?: string | null
+}
+
+/** ثبت ورود کالا به انبار (شارژ موجودی) */
+export async function createStockEntry(body: StockEntryPayload): Promise<StockEntry> {
+  const { data } = await http.post<StockEntry>("inventory/stock_entries/", body)
+  return data
+}
+
+export interface CreateProductPayload {
+  name: string
+  price: number
+  stock: number
+  description?: string | null
+  product_type?: { id: number } | { id: null; name: string } | null
+}
+
+/** ساخت محصول جدید در انبار */
+export async function createProduct(body: CreateProductPayload): Promise<Product> {
+  const { data } = await http.post<Product>("inventory/products/", body)
+  return data
+}
